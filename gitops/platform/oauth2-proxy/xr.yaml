@@ -1,0 +1,14 @@
+apiVersion: auth.nashes.uk/v1alpha1
+kind: XCognitoOAuth
+metadata:
+  name: nashes-oauth
+  namespace: oauth2-proxy
+spec:
+  region: eu-west-2
+  userPoolName: nashes-auth
+  domain: nashes-auth
+  defaultCallbackUrl: https://oauth2.nashes.uk/oauth2/callback
+  googleClientSecretRef:
+    name: google-oauth-credentials
+    idKey: client-id
+    secretKey: client-secret

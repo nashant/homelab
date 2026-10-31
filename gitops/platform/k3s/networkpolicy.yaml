@@ -1,0 +1,199 @@
+# Policies for kube-system; the default deny is cluster-wide
+# (platform/cilium/default-deny.ccnp.yaml). Peers come from the 2026-10-30 traffic capture, the
+# webhooks and APIServices that point here, coredns-custom and the CronJobs. The Cilium agent,
+# operator and Envoy use the host network, so no policy applies to them.
+
+# Almost everything here talks to the API server: CoreDNS, metrics-server, the IRSA webhook, Hubble
+# UI, local-path-provisioner, the Secrets Store CSI driver, and the jwks-sync, hubble-generate-certs
+# and k3s helm-install jobs.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: apiserver
+  namespace: kube-system
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: coredns
+  namespace: kube-system
+spec:
+  podSelector:
+    matchLabels:
+      k8s-app: kube-dns
+  policyTypes: [Ingress, Egress]
+  ingress:
+  # Every pod; host-network pods (Home Assistant) come from the node IPs; OPNsense forwards
+  # cluster names here.
+  - from:
+    - namespaceSelector: {}
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    - ipBlock: {cidr: 172.16.0.1/32}
+    ports:
+    - {protocol: UDP, port: 53}
+    - {protocol: TCP, port: 53}
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - {protocol: TCP, port: 9153}
+  egress:
+  # Upstream for "." and home (forward . /etc/resolv.conf, home.server)
+  - to:
+    - ipBlock: {cidr: 172.16.0.1/32}
+    ports:
+    - {protocol: UDP, port: 53}
+    - {protocol: TCP, port: 53}
+  # nashes.uk and 23oak.uk (coredns-custom) go to BIND
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: bind
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: bind
+    ports:
+    - {protocol: UDP, port: 1053}
+    - {protocol: TCP, port: 1053}
+---
+# The API servers call metrics.k8s.io (APIService); metrics-server reads every kubelet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: metrics-server
+  namespace: kube-system
+spec:
+  podSelector:
+    matchLabels:
+      k8s-app: metrics-server
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 10250}
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 10250}
+---
+# IRSA mutating webhook (failurePolicy Ignore: if the API servers cannot reach it, new pods start
+# without AWS credentials and nothing fails at admission).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pod-identity-webhook
+  namespace: kube-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: amazon-eks-pod-identity-webhook
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 8443}
+---
+# Relay: Hubble UI and Radar in; the Cilium agents' Hubble peer port (host network) out.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hubble-relay
+  namespace: kube-system
+spec:
+  podSelector:
+    matchLabels:
+      k8s-app: hubble-relay
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          k8s-app: hubble-ui
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: radar
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: radar
+    ports:
+    - {protocol: TCP, port: 4245}
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 4244}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hubble-ui
+  namespace: kube-system
+spec:
+  podSelector:
+    matchLabels:
+      k8s-app: hubble-ui
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+    ports:
+    - {protocol: TCP, port: 8081}
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          k8s-app: hubble-relay
+    ports:
+    - {protocol: TCP, port: 4245}
+---
+# AWS: jwks-sync uploads the OIDC discovery document and keys to S3 (Roles Anywhere); rolesanywhere-sync
+# manages the Roles Anywhere trust anchor and profile; the Secrets Store CSI AWS provider reads SSM.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: aws
+  namespace: kube-system
+spec:
+  podSelector:
+    matchExpressions:
+    - {key: app, operator: In, values: [jwks-sync, rolesanywhere-sync, secrets-store-csi-driver-provider-aws]}
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    ports:
+    - {protocol: TCP, port: 443}

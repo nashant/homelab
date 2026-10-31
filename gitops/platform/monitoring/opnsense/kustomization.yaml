@@ -1,0 +1,30 @@
+# Own kustomization: the app-template-defaults component patches every HelmRelease it
+# sees, so it must not reach kube-prometheus-stack's HelmRelease in the parent.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+- ./helmrelease.yaml
+- ./opnsense-exporter-es.yaml
+- ./node.scrapeconfig.yaml
+components:
+- ../../../components/app-template-defaults
+
+# Grafana's dashboard sidecar loads any ConfigMap labelled grafana_dashboard=1.
+# Upstream deploy/grafana/dashboard-v1.json (grafana.com 21113) with the datasource input
+# bound to uid "prometheus", plus Firewall and Host (node_exporter) rows.
+configMapGenerator:
+# Public half of the OPNsense web GUI certificate, the exporter's only trusted root.
+# Replace it whenever the GUI certificate is reissued, or the exporter stops scraping.
+- name: opnsense-webgui-cert
+  files:
+  - webgui.crt
+  options:
+    disableNameSuffixHash: true
+- name: opnsense-grafana-dashboard
+  files:
+  - opnsense.json=grafana-dashboard.json
+  options:
+    disableNameSuffixHash: true
+    labels:
+      grafana_dashboard: "1"

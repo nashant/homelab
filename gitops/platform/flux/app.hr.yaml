@@ -1,0 +1,33 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: flux
+  namespace: flux-system
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: flux
+      version: 2.18.4
+      sourceRef:
+        kind: HelmRepository
+        name: fluxcd
+        namespace: flux-system
+      interval: 1m
+  values:
+    helmController:
+      priorityClassName: platform-high
+    kustomizeController:
+      priorityClassName: platform-high
+    sourceController:
+      priorityClassName: platform-high
+    # Unused (no Alert/Provider/Receiver or image automation objects). Off also removes their CRDs.
+    notificationController:
+      create: false
+    imageAutomationController:
+      create: false
+    imageReflectionController:
+      create: false
+    # The chart's own policies let every Flux pod reach anything; networkpolicy.yaml replaces them.
+    policies:
+      create: false

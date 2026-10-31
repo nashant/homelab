@@ -1,0 +1,16 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: loki-s3
+  namespace: loki
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: loki-s3                   # consumed via global.extraEnvFrom: secretRef
+    creationPolicy: Owner
+  dataFrom:
+  - extract:
+      key: /k8s/loki/s3

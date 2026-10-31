@@ -1,0 +1,18 @@
+# Plex admin token for plex-exporter, mounted as a file (PLEX_TOKEN_FILE).
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: plex-exporter
+  namespace: media
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: plex-exporter
+    creationPolicy: Owner
+  data:
+  - secretKey: token
+    remoteRef:
+      key: /k8s/plex-exporter/token

@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: octo-sts
+  namespace: octo-sts
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::079357235350:role/octo-sts
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: octo-sts
+  namespace: octo-sts
+  labels:
+    app: octo-sts
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: octo-sts
+  template:
+    metadata:
+      labels:
+        app: octo-sts
+    spec:
+      serviceAccountName: octo-sts
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: octo-sts
+        image: ghcr.io/octo-sts/app:0.13.2@sha256:494fac9628eb7960ba04230cf25355436b1dead3be4acebc5729f188c1364f9f
+        ports:
+        - name: http
+          containerPort: 8080
+        env:
+        - name: PORT
+          value: "8080"
+        # Default audience a trust policy expects when it sets none
+        - name: STS_DOMAIN
+          value: octo-sts.octo-sts.svc
+        - name: GITHUB_APP_IDS
+          value: "5464949" # nashant-octo-sts
+        # The App's private key lives only in KMS; octo-sts signs its JWTs
+        # with kms:Sign via IRSA (irsarole.yaml).
+        - name: KMS_PROVIDER
+          value: aws
+        - name: KMS_KEYS
+          value: alias/octo-sts-github-app
+        - name: AWS_REGION
+          value: eu-west-2
+        # Only ever fetch OIDC discovery from this cluster's issuer, whatever
+        # issuer a presented token claims.
+        - name: OCTOSTS_ALLOWED_ISSUERS
+          value: https://23oak-k8s-oidc.s3.eu-west-2.amazonaws.com
+        # Metrics/eventing target GCP; nothing here to receive them.
+        - name: METRICS
+          value: "false"
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        readinessProbe:
+          httpGet: {path: /, port: http}
+          periodSeconds: 10
+        livenessProbe:
+          httpGet: {path: /, port: http}
+          periodSeconds: 30
+        resources:
+          requests: {cpu: 10m, memory: 32Mi}
+          limits: {memory: 128Mi}

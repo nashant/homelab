@@ -1,0 +1,108 @@
+# Cilium policy for the opencode pod. Pure allow-list: anything not listed
+# below is implicitly denied — the LAN (172.16.0.0/16), node IPs, etcd,
+# kubelet (10250), VPN, and arbitrary internet included.
+#
+# Allowed egress:
+#   DNS (kube-dns), Kubernetes API (kube-apiserver entity, 6443),
+#   model/git/npm/Exa FQDNs on 443, octo-sts (GitHub tokens) on 8080,
+#   egress-proxy on 3128 (all other web access, logged; platform/egress-proxy),
+#   everything in namespaces automation + media (user requirement),
+#   HA (8123) and esphome (6052) which are hostNetwork pods and therefore
+#   reachable via the host entity rather than the namespace identity.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: opencode
+  namespace: opencode
+spec:
+  endpointSelector: {}
+  ingress:
+  # Web UI (ingress.yaml) and herdr's sshd (tcproute.yaml), private-traefik only
+  - fromEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: traefik
+        k8s:app.kubernetes.io/instance: private-traefik
+    toPorts:
+    - ports:
+      - {port: "8080", protocol: TCP}
+      - {port: "2222", protocol: TCP}
+  # kubelet probes / kubectl port-forward
+  - fromEntities: [host, remote-node]
+    toPorts:
+    - ports:
+      - {port: "8080", protocol: TCP}
+      - {port: "2222", protocol: TCP}
+  egress:
+  # DNS — also required for FQDN rules below to resolve
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s:k8s-app: kube-dns
+    toPorts:
+    - ports: [{port: "53", protocol: ANY}]
+      rules:
+        dns:
+        - matchPattern: "*"
+  # Kubernetes API (in-cluster SA token). Cilium translates the 172.31.0.1:443
+  # VIP before policy, so match the backend: kube-apiserver entity on 6443.
+  - toEntities: [kube-apiserver]
+    toPorts:
+    - ports: [{port: "6443", protocol: TCP}]
+  # Model providers, GitHub (api/releases/code), npm (plugin installs).
+  # Git over HTTPS with a fine-grained PAT — no SSH (port 22) needed.
+  - toFQDNs:
+    - matchName: api.z.ai.
+    - matchName: openrouter.ai.
+    - matchName: github.com.
+    - matchName: api.github.com.
+    - matchName: codeload.github.com.
+    - matchName: objects.githubusercontent.com.
+    - matchName: registry.npmjs.org.
+    - matchName: mcp.exa.ai. # web search/fetch MCP (opencode.json)
+    toPorts:
+    - ports: [{port: "443", protocol: TCP}]
+  # octo-sts: short-lived GitHub tokens (platform/octo-sts)
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: octo-sts
+        k8s:app: octo-sts
+    toPorts:
+    - ports: [{port: "8080", protocol: TCP}]
+  # MCP servers holding credentials the agent never sees (platform/mcp)
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: mcp
+    toPorts:
+    - ports: [{port: "8080", protocol: TCP}]
+  # Forward proxy for everything else on the web (logged)
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: egress-proxy
+        k8s:app: egress-proxy
+    toPorts:
+    - ports: [{port: "3128", protocol: TCP}]
+  # Everything in automation + media namespaces (HA, frigate, esphome,
+  # musicassistant, predbat, radbalance, mqtt, mariadb, *arr, plex, ...)
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: automation
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: media
+  # hostNetwork services in those namespaces: homeassistant:8123, esphome:6052
+  # (incl. homeassistant-dev on 8123). Scoped by port, not by node.
+  - toEntities: [host, remote-node]
+    toPorts:
+    - ports:
+      - {port: "8123", protocol: TCP}
+      - {port: "6052", protocol: TCP}
+---
+# Standard default-deny next to the Cilium policies above, so a pod that no Cilium policy selects is
+# still closed. It adds no allow rules, so it does not change what those policies allow.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: opencode
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]

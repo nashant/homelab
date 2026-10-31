@@ -1,0 +1,192 @@
+# Official plexinc chart (https://github.com/plexinc/pms-docker/tree/master/charts/plex-media-server).
+# The app-template-defaults component does NOT apply here (it sets chartRef to app-template),
+# so the full HelmRelease spec lives in this file.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: plex
+  namespace: media
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: plex-media-server
+      version: 1.9.0
+      sourceRef:
+        kind: HelmRepository
+        name: plex
+        namespace: flux-system
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  driftDetection:
+    mode: warn
+  # the chart's /transcode is an emptyDir; live uses a 70Gi longhorn-scratch ephemeral PVC
+  postRenderers:
+  - kustomize:
+      patches:
+      - target:
+          kind: StatefulSet
+          name: plex
+        patch: |
+          apiVersion: apps/v1
+          kind: StatefulSet
+          metadata:
+            name: plex
+          spec:
+            template:
+              spec:
+                volumes:
+                - name: pms-transcode
+                  emptyDir: null
+                  ephemeral:
+                    volumeClaimTemplate:
+                      spec:
+                        accessModes: [ReadWriteOnce]
+                        storageClassName: longhorn-scratch
+                        resources:
+                          requests:
+                            storage: 70Gi
+  values:
+    # Service/StatefulSet named plex, so the Service stays plex.media:32400 and the
+    # PLEX_SERVICE_HOST service-link env var used by ADVERTISE_IP keeps working
+    fullnameOverride: plex
+    priorityClassName: apps-high
+    image:
+      registry: docker.io
+      repository: plexinc/pms-docker
+      tag: 1.43.5.11029-6bf8af3f0
+      sha: sha256:01bdf0ad6d53198da4331540c1e73ab65db7a72e961fff97ecb0847d46055c5f
+    # never schedule beside frigate
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app: frigate
+          topologyKey: kubernetes.io/hostname
+    statefulSet:
+      podAnnotations:
+        fluentbit.io/parser: plex
+    pms:
+      configExistingClaim: plex-config
+      resources:
+        requests:
+          cpu: 500m
+          memory: 2G
+          gpu.intel.com/i915: "3"
+        limits:
+          cpu: "4"
+          memory: 4G
+          gpu.intel.com/i915: "3"
+    extraEnv:
+      PLEX_UID: "1000"
+      PLEX_GID: "1000"
+      CHANGE_CONFIG_DIR_OWNERSHIP: "false"
+      TZ: Europe/London
+      ADVERTISE_IP: http://$(PLEX_SERVICE_HOST):32400
+    service:
+      port: 32400
+      annotations:
+        # upnp-nat-controller creates the public 32400 port forward from these
+        tcp.advertise.upnp/enabled: "true"
+        tcp.advertise.upnp/ports: "32400"
+    extraInitContainers:
+    - name: setup
+      image: busybox
+      imagePullPolicy: IfNotPresent
+      command: [sh, -c, chown 1000:1000 /transcode]
+      volumeMounts:
+      - name: pms-transcode
+        mountPath: /transcode
+    extraContainers:
+    - name: log-tailer
+      image: busybox
+      imagePullPolicy: IfNotPresent
+      command:
+      - sh
+      - -c
+      - tail -F '/config/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log'
+      volumeMounts:
+      - name: pms-config
+        mountPath: /config
+        readOnly: true
+    extraVolumes:
+    - name: storage
+      nfs:
+        server: 172.16.0.10
+        path: /mnt/storage
+    extraVolumeMounts:
+    - name: storage
+      mountPath: /mnt/storage
+    # The config claim, owned by the release and kept on uninstall/rollback.
+    # pms.configExistingClaim points the StatefulSet at it instead of a volumeClaimTemplate.
+    extraManifests:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: plex-config
+        labels:
+          app: plex
+          volume: config
+        annotations:
+          helm.sh/resource-policy: keep
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 25Gi
+    # Clients reach 32400 directly (LAN and the UPnP-forwarded public port) and via the plex TCPRoute.
+    - apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: plex
+        namespace: media
+      spec:
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: plex-media-server
+        policyTypes: [Ingress, Egress]
+        ingress:
+        - from:
+          - ipBlock:
+              cidr: 0.0.0.0/0
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: traefik
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: traefik
+          - podSelector:
+              matchLabels:
+                app.kubernetes.io/name: requestrr
+          # library refresh after an import
+          - podSelector:
+              matchLabels:
+                app.kubernetes.io/name: sonarr
+          - podSelector:
+              matchLabels:
+                app.kubernetes.io/name: radarr
+          - podSelector:
+              matchLabels:
+                app.kubernetes.io/name: plex-exporter
+          ports:
+          - {protocol: TCP, port: 32400}
+        - from:
+          - ipBlock:
+              cidr: 172.16.0.0/24
+          ports:
+          - {protocol: UDP, port: 1900}
+          - {protocol: UDP, port: 5353}
+          - {protocol: UDP, port: 32410, endPort: 32414}
+        egress:
+        - to:
+          - ipBlock:
+              cidr: 0.0.0.0/0
+              except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]

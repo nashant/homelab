@@ -1,0 +1,32 @@
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: MariaDB
+metadata:
+  name: firefly-db
+  namespace: finance
+spec:
+  rootPasswordSecretKeyRef:
+    name: firefly
+    key: db-root-password
+  # Initial user gets ALL PRIVILEGES on the initial database (operator API reference).
+  username: firefly
+  passwordSecretKeyRef:
+    name: firefly
+    key: db-password
+  database: firefly
+  replicas: 1
+  port: 3306
+  storage:
+    size: 5Gi
+    storageClassName: longhorn
+  myCnf: |
+    [mariadb]
+    bind-address=*
+    character_set_server=utf8mb4
+    collation_server=utf8mb4_unicode_ci
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi

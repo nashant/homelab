@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: seaweedfs-tier-move
+  namespace: seaweedfs
+spec:
+  # Daily at 03:00. Ages volumes off the hot (ssd) tier to cold (hdd) once
+  # their data is >7d old. quietFor=168h = "no writes for 7 days", which for
+  # append-only Loki/Tempo/Thanos volumes means "older than 7d". fullPercent=0
+  # so partially-filled volumes still move (the default 95% would skip them).
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: tier-move
+            image: chrislusf/seaweedfs:4.30
+            # volume.tier.move requires the exclusive admin lock first.
+            command:
+            - sh
+            - -c
+            - |
+              printf 'lock\nvolume.tier.move -fromDiskType=ssd -toDiskType=hdd -fullPercent=0 -quietFor=168h -apply\nunlock\n' \
+                | weed shell -master=seaweedfs-master.seaweedfs:9333

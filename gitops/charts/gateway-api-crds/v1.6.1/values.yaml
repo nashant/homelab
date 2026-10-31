@@ -1,0 +1,16 @@
+# One switch per file in crds-files/ (key = the part after the last "_").
+crds:
+  backendtlspolicies: true
+  gatewayclasses: true
+  gateways: true
+  grpcroutes: true
+  httproutes: true
+  listenersets: true
+  referencegrants: true
+  tcproutes: true
+  tlsroutes: true
+  udproutes: true
+# Versions upstream defines but does not serve, to serve anyway: {<key>: [<version>, ...]}
+serve: {}
+# Non-CRD objects upstream ships with the CRDs (extra-files/)
+extras: true

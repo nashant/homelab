@@ -1,0 +1,24 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: predbat
+  namespace: automation
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: predbat                    # mounted at /secrets in deployment.yaml
+    creationPolicy: Owner
+    template:
+      type: Opaque
+      # Rendered as a Predbat secrets.yaml; apps.yaml references it as
+      # `ha_key: !secret ha_key` and PREDBAT_SECRETS_FILE points at it.
+      data:
+        secrets.yaml: |
+          ha_key: "{{ .ha_key }}"
+  data:
+  - secretKey: ha_key
+    remoteRef:
+      key: /k8s/predbat/ha-key       # HA long-lived access token created for predbat

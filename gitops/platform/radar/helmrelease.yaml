@@ -1,0 +1,61 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: radar
+  namespace: radar
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: radar
+      version: 1.19.0
+      sourceRef:
+        kind: HelmRepository
+        name: skyhook
+        namespace: flux-system
+      interval: 1m
+  values:
+    image:
+      tag: 1.19.0@sha256:e8dc4d847916f66833f6ec9b18aaeb426257063572693c3c8866ec43f8bca7dc
+
+    # auth.mode stays "none": proxy/oidc give the ServiceAccount impersonate on every user and
+    # group plus cluster-wide Secret read. People reach the UI through oauth2-proxy (ingress.yaml);
+    # Radar acts as its own read-only ServiceAccount for everyone.
+    auth:
+      mode: none
+    rbac:
+      helm: false
+      secrets: false
+      podExec: false
+      portForward: false
+      podLogs: true
+      traffic: true     # Hubble relay; get on the hubble-relay-client-certs Secret only
+      metrics: true
+
+    # The chart adds only <svc>.<ns>; the ingress hosts live in ingress.yaml, not chart values.
+    allowedHosts:
+    - radar.nashes.uk
+    - mcp-radar.nashes.uk
+
+    timeline:
+      storage: memory
+
+    traffic:
+      prometheusUrl: http://kube-prometheus-prometheus.monitoring.svc:9090
+
+    usageReporting:
+      enabled: false
+
+    mcp:
+      enabled: true
+      execTools: false
+
+    extraArgs:
+    - --mcp-read-only        # /mcp returns 404; only /mcp-readonly is served
+    - --disable-exec
+    - --disable-helm-write
+    - --no-version-check
+
+    env:
+    - name: RADAR_CLOUD_FUNNEL
+      value: "off"

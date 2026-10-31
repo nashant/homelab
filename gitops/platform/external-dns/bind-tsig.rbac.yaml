@@ -1,0 +1,29 @@
+# The bind tsig init container creates and reads the TSIG key Secret here. It is the only
+# container that mounts the bind ServiceAccount token. RBAC cannot scope create by name.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: bind-tsig
+  namespace: external-dns
+rules:
+- apiGroups: [""]
+  resources: [secrets]
+  verbs: [create]
+- apiGroups: [""]
+  resources: [secrets]
+  resourceNames: [bind-tsig]
+  verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: bind-tsig
+  namespace: external-dns
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: bind-tsig
+subjects:
+- kind: ServiceAccount
+  name: bind
+  namespace: bind

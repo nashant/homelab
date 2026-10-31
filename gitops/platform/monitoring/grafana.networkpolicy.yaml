@@ -1,0 +1,107 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  # Grafana trusts the X-Auth-Request-Email header (auth.proxy), so anything
+  # that can reach :3000 WITHOUT traversing the oauth2-proxy middleware gets
+  # Admin. Restrict ingress to the only legitimate sources: the traefik pods
+  # (which sit behind the oauth2 forwardAuth) and Prometheus (metrics scrape).
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # User traffic — only via traefik, which enforces oauth2-proxy auth.
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+    ports:
+    - protocol: TCP
+      port: 3000
+  # mcp-grafana (platform/mcp/grafana): service-account token auth, and it
+  # forwards no client headers, so it can't assert X-Auth-Request-Email.
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: mcp
+      podSelector:
+        matchLabels:
+          app: grafana
+    ports:
+    - protocol: TCP
+      port: 3000
+  # Prometheus metrics scrape (ServiceMonitor hits the same http-web port).
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  # Datasources: Thanos Query ("Prometheus"), Alertmanager, Loki, Tempo
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: thanos
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: thanos
+          app.kubernetes.io/component: query
+    ports:
+    - protocol: TCP
+      port: 9090
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: alertmanager
+    ports:
+    - protocol: TCP
+      port: 9093
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: loki
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: loki
+    ports:
+    - protocol: TCP
+      port: 3100
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: tempo
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: tempo
+    ports:
+    - protocol: TCP
+      port: 3200
+  # The dashboard and datasource sidecars watch ConfigMaps through the API server.
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - protocol: TCP
+      port: 6443
+  # grafana.com: update checks and the plugin catalog
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    ports:
+    - protocol: TCP
+      port: 443

@@ -1,0 +1,49 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: unifi-private
+  namespace: unifi
+spec:
+  ingressClassName: private-traefik
+  rules:
+  - host: &23oak unifi.23oak.uk
+    http: &http
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: unifi
+            port:
+              name: ui
+  - host: &nashes unifi.nashes.uk
+    http: *http
+  tls:
+  - hosts:
+    - *23oak
+    - *nashes
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: unifi-public
+  namespace: unifi
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: oauth2-proxy-oauth2-proxy@kubernetescrd
+    external-dns.alpha.kubernetes.io/target: home.nashes.uk
+spec:
+  ingressClassName: public-traefik
+  rules:
+  - host: &nashes unifi.nashes.uk
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: unifi
+            port:
+              name: ui
+  tls:
+  - hosts:
+    - *nashes

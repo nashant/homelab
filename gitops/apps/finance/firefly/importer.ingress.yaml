@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: firefly-importer
+  namespace: finance
+spec:
+  ingressClassName: private-traefik
+  rules:
+  - host: &host firefly-importer.nashes.uk
+    http:
+      paths:
+      - path: /upload
+        pathType: Prefix
+        backend:
+          service:
+            name: firefly-upload-helper
+            port:
+              name: upload
+      - pathType: ImplementationSpecific
+        backend:
+          service:
+            name: firefly-importer
+            port:
+              name: http
+  tls:
+  - hosts:
+    - *host

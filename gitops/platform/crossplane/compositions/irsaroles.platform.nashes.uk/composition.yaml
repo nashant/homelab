@@ -1,0 +1,96 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: irsa-role
+  labels:
+    crossplane.io/xrd: irsaroles.platform.nashes.uk
+spec:
+  compositeTypeRef:
+    apiVersion: platform.nashes.uk/v1alpha1
+    kind: IRSARole
+  mode: Pipeline
+  pipeline:
+  - step: create-irsa-resources
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |
+          {{- $xr := .observed.composite.resource }}
+          {{- $spec := $xr.spec }}
+          {{- $namespace := $xr.metadata.namespace }}
+          {{- $oidcProvider := printf "arn:aws:iam::079357235350:oidc-provider/%s" $spec.oidcProvider }}
+
+          {{- $subs := list }}
+          {{- range $spec.serviceAccounts }}
+          {{-   $subs = append $subs (printf "system:serviceaccount:%s:%s" $namespace .) }}
+          {{- end }}
+          {{- $policyStatement := dict "Effect" "Allow" "Action" "sts:AssumeRoleWithWebIdentity" }}
+          {{- $audCondition := dict (printf "%s:aud" $spec.oidcProvider) (list "sts.amazonaws.com") }}
+          {{- $subCondition := dict (printf "%s:sub" $spec.oidcProvider) $subs }}
+          {{- $condition := dict "StringEquals" $audCondition "StringLike" $subCondition }}
+          {{- $_ := set $policyStatement "Principal" (dict "Federated" $oidcProvider) }}
+          {{- $_ := set $policyStatement "Condition" $condition }}
+          {{- $trustPolicy := dict "Version" "2012-10-17" "Statement" (list $policyStatement) }}
+
+          ---
+          apiVersion: iam.aws.m.upbound.io/v1beta1
+          kind: Role
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: role
+              crossplane.io/external-name: {{ $spec.roleName }}
+            name: {{ $spec.roleName }}
+          spec:
+            forProvider:
+              assumeRolePolicy: '{{ $trustPolicy | toJson }}'
+
+          {{- range $i, $policyName := (default list $spec.managedPolicyNames) }}
+          ---
+          apiVersion: iam.aws.m.upbound.io/v1beta1
+          kind: RolePolicyAttachment
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: rpa-managed-{{ $i }}
+            name: {{ $spec.roleName }}-{{ $policyName | lower }}
+          spec:
+            forProvider:
+              policyArn: arn:aws:iam::aws:policy/{{ $policyName }}
+              roleRef:
+                name: {{ $spec.roleName }}
+          {{- end }}
+
+          {{- range $policyName, $policyDoc := (default dict $spec.policies) }}
+          ---
+          apiVersion: iam.aws.m.upbound.io/v1beta1
+          kind: Policy
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: policy-{{ $policyName }}
+            name: {{ $spec.roleName }}-{{ $policyName }}
+          spec:
+            forProvider:
+              policy: |
+                {{ $policyDoc | nindent 8 }}
+
+          ---
+          apiVersion: iam.aws.m.upbound.io/v1beta1
+          kind: RolePolicyAttachment
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: rpa-custom-{{ $policyName }}
+            name: {{ $spec.roleName }}-custom-{{ $policyName }}
+          spec:
+            forProvider:
+              policyArnRef:
+                name: {{ $spec.roleName }}-{{ $policyName }}
+              roleRef:
+                name: {{ $spec.roleName }}
+          {{- end }}
+
+  - step: auto-ready
+    functionRef:
+      name: function-auto-ready

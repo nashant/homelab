@@ -1,0 +1,28 @@
+{{- range $path, $_ := .Files.Glob "crds-files/*.yaml" }}
+{{- $key := $path | base | trimSuffix ".yaml" | splitList "_" | last }}
+{{- if not (hasKey $.Values.crds $key) }}
+{{- fail (printf "no .Values.crds.%s entry for vendored file %s" $key $path) }}
+{{- end }}
+{{- if index $.Values.crds $key }}
+{{- $crd := $.Files.Get $path | fromYaml }}
+{{- if hasKey $crd "Error" }}
+{{- fail (printf "%s: %s" $path $crd.Error) }}
+{{- end }}
+{{- $_ := set $crd.metadata "annotations" (merge (dict "helm.sh/resource-policy" "keep") ($crd.metadata.annotations | default dict)) }}
+{{- $serve := index $.Values.serve $key | default list }}
+{{- $defined := list }}
+{{- range $crd.spec.versions }}
+{{- $defined = append $defined .name }}
+{{- if has .name $serve }}
+{{- $_ := set . "served" true }}
+{{- end }}
+{{- end }}
+{{- range $serve }}
+{{- if not (has . $defined) }}
+{{- fail (printf "serve.%s: version %s is not defined upstream" $key .) }}
+{{- end }}
+{{- end }}
+---
+{{ toYaml $crd }}
+{{- end }}
+{{- end }}

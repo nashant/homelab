@@ -1,0 +1,201 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opencode
+  namespace: opencode
+  labels:
+    app: opencode
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # RWO PVC
+  selector:
+    matchLabels:
+      app: opencode
+  template:
+    metadata:
+      labels:
+        app: opencode
+    spec:
+      serviceAccountName: opencode # see rbac.yaml + admission-policy.yaml
+      runtimeClassName: runsc # gVisor kernel boundary
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+      - name: first-boot
+        image: registry.nashes.uk/opencode:2.1.2-7
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          set -e
+          # Seed config + plugin from the image into the PVC on first boot only
+          if [ ! -d "$HOME/.config/opencode/plugin" ]; then
+            mkdir -p "$HOME/.config/opencode"
+            cp -r /opt/opencode-home/. "$HOME/.config/opencode/"
+          fi
+          # GitHub: 1-hour tokens from octo-sts (platform/octo-sts). `<owner>/<repo>`
+          # uses that repo's write policy; a bare `<owner>` (or a repo without one)
+          # falls back to the owner-wide read-only `opencode-read` policy.
+          mkdir -p "$HOME/bin"
+          cat > "$HOME/bin/github-token" <<'EOF'
+          #!/bin/sh
+          exchange() {
+            curl -fsS -H "Authorization: Bearer $(cat /var/run/secrets/octo-sts/token)" \
+              "http://octo-sts.octo-sts.svc/sts/exchange?scope=$1&identity=$2" | jq -er .token
+          }
+          token() {
+            case $1 in
+              */*) exchange "$1" opencode 2>/dev/null || exchange "${1%%/*}" opencode-read ;;
+              *) exchange "$1" opencode-read ;;
+            esac
+          }
+          if [ "$1" = get ]; then
+            while IFS='=' read -r k v; do
+              case $k in host) host=$v ;; path) path=$v ;; esac
+            done
+            [ "$host" = github.com ] || exit 0
+            tok=$(token "${path%.git}") || exit 0
+            echo username=x-access-token
+            echo "password=$tok"
+          elif [ -n "$1" ] && [ "$1" != store ] && [ "$1" != erase ]; then
+            token "$1"
+          fi
+          EOF
+          sed -i 's/^          //' "$HOME/bin/github-token" && chmod 700 "$HOME/bin/github-token"
+          git config --global credential.helper "$HOME/bin/github-token"
+          git config --global credential.useHttpPath true # helper needs the repo path
+          # accept ssh-style remote URLs, transparently use https + PAT
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          # Git identity (edit on the PVC afterwards if you want a different one)
+          git config --global user.name  "opencode-agent" || true
+          git config --global user.email "opencode@nashes.uk" || true
+        securityContext: &secctx
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        env:
+        - name: HOME
+          value: /home/opencode
+        volumeMounts:
+        - name: home
+          mountPath: /home/opencode
+        - name: tmp
+          mountPath: /tmp
+      containers:
+      # Web UI / API for the phone and `opencode --server` (opencode.nashes.uk).
+      # Same image, PVC, SA and sandbox as the herdr container below.
+      - name: web
+        image: registry.nashes.uk/opencode:2.1.2-7
+        # opencode only takes the server password from its environment, so
+        # it is read from the mounted file here rather than set in the spec.
+        command: ["/bin/sh", "-c"]
+        args:
+        - >-
+          OPENCODE_SERVER_PASSWORD="$(cat /opt/secrets/server/password)"
+          exec opencode serve --hostname 0.0.0.0 --port 8080
+        ports:
+        - name: http
+          containerPort: 8080
+        env:
+        - name: HOME
+          value: /home/opencode
+        - name: HASS_TOKEN_FILE
+          value: /opt/secrets/hass/token
+        envFrom:
+        - configMapRef: {name: proxy-env}
+        securityContext:
+          <<: *secctx
+        volumeMounts:
+        - name: home
+          mountPath: /home/opencode
+        - name: credentials
+          mountPath: /opt/secrets
+          readOnly: true
+        - name: octo-sts-token
+          mountPath: /var/run/secrets/octo-sts
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests: {cpu: 250m, memory: 512Mi}
+          limits: {cpu: "4", memory: 8Gi}
+        readinessProbe:
+          tcpSocket: {port: 8080}
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket: {port: 8080}
+          periodSeconds: 30
+          failureThreshold: 5
+      # herdr controller: unprivileged sshd for `herdr --remote`
+      # (image/herdr-controller), reached via tcproute.yaml.
+      - name: herdr
+        image: registry.nashes.uk/opencode:2.1.2-7
+        ports:
+        - name: ssh
+          containerPort: 2222
+        env:
+        - name: HOME
+          value: /home/opencode
+        - name: HASS_TOKEN_FILE # Home Assistant long-lived access token
+          value: /opt/secrets/hass/token
+        envFrom:
+        - configMapRef: {name: proxy-env}
+        securityContext:
+          <<: *secctx
+        volumeMounts:
+        - name: home
+          mountPath: /home/opencode
+        - name: credentials # opencode-es.yaml; LLM keys are {file:} refs in opencode.json
+          mountPath: /opt/secrets
+          readOnly: true
+        - name: octo-sts-token
+          mountPath: /var/run/secrets/octo-sts
+          readOnly: true
+        - name: authorized-keys
+          mountPath: /etc/herdr/keys
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests: {cpu: 500m, memory: 1Gi}
+          limits: {cpu: "4", memory: 8Gi}
+        readinessProbe:
+          tcpSocket: {port: 2222}
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket: {port: 2222}
+          periodSeconds: 30
+          failureThreshold: 5
+      volumes:
+      - name: home
+        persistentVolumeClaim: {claimName: opencode-home}
+      - name: credentials
+        secret:
+          secretName: opencode
+          defaultMode: 0440 # files are root:1000 (fsGroup), so the group needs read
+          items:
+          - {key: zai-api-key, path: llm/zai}
+          - {key: openrouter-api-key, path: llm/openrouter}
+          - {key: server-password, path: server/password}
+          - {key: hass-token, path: hass/token}
+      - name: authorized-keys # authorized-keys.yaml (public keys)
+        configMap:
+          name: herdr-authorized-keys
+      # Only accepted by octo-sts (audience), so it can't be replayed against
+      # AWS or the API server's default audience.
+      - name: octo-sts-token
+        projected:
+          sources:
+          - serviceAccountToken:
+              audience: octo-sts.octo-sts.svc
+              expirationSeconds: 3600
+              path: token
+      - name: tmp
+        emptyDir: {}

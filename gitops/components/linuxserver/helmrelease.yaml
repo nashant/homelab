@@ -1,0 +1,12 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: not-used
+spec:
+  valuesFrom:
+  - kind: ConfigMap
+    name: RELEASE-app-template-defaults
+    valuesKey: defaults.yaml
+  - kind: ConfigMap
+    name: RELEASE-app-template-linuxserver
+    valuesKey: linuxserver.yaml

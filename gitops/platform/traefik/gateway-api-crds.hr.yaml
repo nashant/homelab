@@ -1,0 +1,18 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: gateway-api-crds
+  namespace: traefik
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: ./gitops/charts/gateway-api-crds/v1.6.1
+      sourceRef:
+        kind: GitRepository
+        name: home
+        namespace: flux-system
+  values:
+    serve:
+      # Traefik's experimental gateway provider (v3.7.1 to v3.7.16) lists TCPRoutes at v1alpha2
+      tcproutes: [v1alpha2]

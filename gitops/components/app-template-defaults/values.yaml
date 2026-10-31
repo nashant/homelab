@@ -1,0 +1,9 @@
+defaultPodOptions:
+  automountServiceAccountToken: false
+  securityContext:
+    # Images whose USER is a name rather than a uid also need runAsUser/runAsGroup
+    # in the app's values, or the kubelet refuses to start them.
+    runAsNonRoot: true
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault

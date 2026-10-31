@@ -1,0 +1,10 @@
+# Deliberately NOT one of opencode's edit namespaces (apps/opencode/rbac.yaml):
+# the agent must not be able to exec in here, mount this SA, or edit the policy.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: octo-sts
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

@@ -1,0 +1,218 @@
+# Sure (https://github.com/we-promise/sure), Rails + Sidekiq in ONE pod: they share /rails/storage and
+# Longhorn RWO cannot mount across nodes. bin/docker-entrypoint migrates only for `./bin/rails server`,
+# so on a fresh DB the worker CrashLoops until web has created the schema. Postgres: db.cluster.yaml.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: sure
+  namespace: finance
+spec:
+  values:
+    defaultPodOptionsStrategy: merge
+    defaultPodOptions:
+      securityContext:
+        fsGroup: 1000   # image runs as rails:rails 1000:1000
+    controllers:
+      main:
+        forceRename: sure       # keep the live name (two controllers ⇒ chart would say sure-main)
+        strategy: Recreate      # RWO storage PVC — never two pods at once
+        containers:
+          app:
+            # Custom build of the household-settlement branch (live wins over upstream ghcr.io/we-promise/sure).
+            image: &image
+              repository: registry.nashes.uk/nashant/sure
+              tag: household-settlement-b5a6114be@sha256:c087094541f81201d87becd62d8e7c97073345311ab14b1d8be7b26b3e1f3869
+            envFrom: &envFrom
+            - configMapRef:
+                name: sure-env
+            env: &env
+              SECRET_KEY_BASE:
+                valueFrom:
+                  secretKeyRef: {name: sure, key: secret-key-base}
+              POSTGRES_PASSWORD:
+                valueFrom:
+                  secretKeyRef: {name: sure, key: db-password}
+              MCP_API_TOKEN:
+                valueFrom:
+                  secretKeyRef: {name: sure, key: mcp-api-token}
+            # /up returns 200 only if the app boots without exceptions (config/routes.rb:910-912).
+            probes:
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /up
+                    port: 3000
+                  periodSeconds: 5
+                  failureThreshold: 60      # first boot runs db:prepare
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /up
+                    port: 3000
+                  periodSeconds: 10
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /up
+                    port: 3000
+                  periodSeconds: 30
+                  failureThreshold: 5
+            resources:
+              requests:
+                cpu: 250m
+                memory: 768Mi
+              limits:
+                cpu: "2"
+                memory: 2Gi
+          worker:
+            image: *image
+            command: ["bundle", "exec", "sidekiq"]
+            envFrom: *envFrom
+            env: *env
+            resources:
+              requests:
+                cpu: 100m
+                memory: 512Mi
+              limits:
+                cpu: "1"
+                memory: 1Gi
+      redis:
+        strategy: Recreate
+        pod:
+          securityContext:
+            # what the redis entrypoint drops to (gosu redis) when started as root
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+        containers:
+          app:
+            image:
+              repository: docker.io/library/redis
+              tag: 7.4.11@sha256:4fa24486b8bcca8eec45ee0eb166edc674795e53a2b53d1a9ef263eecebaac85
+            probes:
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  exec:
+                    command: ["redis-cli", "ping"]
+                  periodSeconds: 5
+                  failureThreshold: 12
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  exec:
+                    command: ["redis-cli", "ping"]
+                  periodSeconds: 10
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 500m
+                memory: 256Mi
+    service:
+      app:
+        forceRename: sure       # sure-app otherwise
+        controller: main
+        ports:
+          http:
+            port: 3000
+      redis:
+        controller: redis
+        ports:
+          redis:
+            port: 6379
+    ingress:
+      app:
+        className: private-traefik
+        hosts:
+        - host: &host sure.nashes.uk
+          paths:
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: app
+              port: http
+        tls:
+        - hosts: [*host]
+    persistence:
+      # ActiveStorage local disk (statement uploads, import files): written by web, read by Sidekiq.
+      storage:
+        forceRename: sure-storage
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 5Gi
+        advancedMounts:
+          main:
+            app:
+            - path: /rails/storage
+            worker:
+            - path: /rails/storage
+      redis:
+        forceRename: sure-redis
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 1Gi
+        advancedMounts:
+          redis:
+            app:
+            - path: /data
+    networkpolicies:
+      main:
+        controller: main
+        forceRename: sure
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: traefik
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: private-traefik
+            ports:
+            - {protocol: TCP, port: 3000}
+          egress:
+          - to:
+            - podSelector:
+                matchLabels:
+                  cnpg.io/cluster: sure-pg
+            ports:
+            - {protocol: TCP, port: 5432}
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: sure
+                  app.kubernetes.io/controller: redis
+            ports:
+            - {protocol: TCP, port: 6379}
+          # Sidekiq jobs (exchange rates, providers)
+          - to:
+            - ipBlock:
+                cidr: 0.0.0.0/0
+                except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+            ports:
+            - {protocol: TCP, port: 443}
+      redis:
+        controller: redis
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: sure
+                  app.kubernetes.io/controller: main
+            ports:
+            - {protocol: TCP, port: 6379}

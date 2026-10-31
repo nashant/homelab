@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: seaweedfs-volume-cold
+  namespace: seaweedfs
+spec:
+  serviceName: seaweedfs-volume-cold
+  replicas: 1
+  selector:
+    matchLabels:
+      app: seaweedfs
+      component: volume-cold
+  template:
+    metadata:
+      labels:
+        app: seaweedfs
+        component: volume-cold
+    spec:
+      priorityClassName: platform-high
+      containers:
+      - name: seaweedfs
+        image: chrislusf/seaweedfs:4.30
+        command:
+        - weed
+        - volume
+        - -mserver=seaweedfs-master.seaweedfs:9333
+        - -dir=/data
+        - -disk=hdd
+        - -max=0
+        - -port=8080
+        - -ip.bind=0.0.0.0
+        - -readMode=proxy
+        - -ip=$(POD_NAME).seaweedfs-volume-cold.seaweedfs
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        ports:
+        - containerPort: 8080
+          name: http
+        volumeMounts:
+        - name: data
+          mountPath: /data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: longhorn-bulk
+      resources:
+        requests:
+          storage: 1Ti
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs-volume-cold
+  namespace: seaweedfs
+spec:
+  clusterIP: None
+  selector:
+    app: seaweedfs
+    component: volume-cold
+  ports:
+  - port: 8080
+    name: http

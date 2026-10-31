@@ -1,0 +1,74 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: requestrr
+  namespace: media
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: apps-high
+      # raw Deployment had enableServiceLinks true (k8s default)
+      enableServiceLinks: true
+      annotations:
+        fluentbit.io/parser: requestrr
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            image:
+              repository: ghcr.io/linuxserver/requestrr
+              tag: V2.1.2-ls44@sha256:3136acf009b7c05b7f20c14529b4295252c19b02655e9f21a78e6cf165d83510
+            resources:
+              requests:
+                cpu: 200m
+                memory: 300M
+              limits:
+                cpu: 400m
+                memory: 600M
+    service:
+      app:
+        controller: main
+        ports:
+          http:
+            port: 4545
+    persistence:
+      config:
+        forceRename: requestrr-config
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 5Gi
+        globalMounts:
+        - path: /config
+    networkpolicies:
+      # No traffic in the capture; peers are its configured services and Discord.
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          egress:
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: radarr
+            ports:
+            - {protocol: TCP, port: 7878}
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: sonarr
+            ports:
+            - {protocol: TCP, port: 8989}
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: plex-media-server
+            ports:
+            - {protocol: TCP, port: 32400}
+          - to:
+            - ipBlock:
+                cidr: 0.0.0.0/0
+                except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+            ports:
+            - {protocol: TCP, port: 443}

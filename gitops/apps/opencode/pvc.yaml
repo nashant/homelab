@@ -1,0 +1,14 @@
+# Persistent home for the agent: repos (cloned under /home/opencode/repos),
+# opencode DB/sessions, config, git identity, known_hosts. Survives pod
+# restarts; snapshot via Longhorn for checkpoints.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opencode-home
+  namespace: opencode
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 50Gi

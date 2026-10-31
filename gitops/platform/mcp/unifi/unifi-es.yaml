@@ -1,0 +1,20 @@
+# UniFi OS local account for unifi-network-mcp (../README.md).
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: unifi
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: unifi
+    creationPolicy: Owner
+  data:
+  - secretKey: username
+    remoteRef:
+      key: /k8s/mcp/unifi-username
+  - secretKey: password
+    remoteRef:
+      key: /k8s/mcp/unifi-password

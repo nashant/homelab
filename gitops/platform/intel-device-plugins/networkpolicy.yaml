@@ -1,0 +1,37 @@
+# Policies for intel-device-plugins; the default deny is cluster-wide
+# (platform/cilium/default-deny.ccnp.yaml). Peers come from the 2026-10-30 traffic capture and the
+# webhooks. The GPU plugin talks to the kubelet through its socket, not over the network.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: apiserver
+  namespace: intel-device-plugins
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}
+---
+# The API servers call the operator's webhooks (failurePolicy Fail for the device-plugin resources).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: controller-manager
+  namespace: intel-device-plugins
+spec:
+  podSelector:
+    matchLabels:
+      control-plane: controller-manager
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 9443}

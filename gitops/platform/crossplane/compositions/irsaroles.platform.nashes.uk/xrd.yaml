@@ -1,0 +1,49 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: irsaroles.platform.nashes.uk
+spec:
+  group: platform.nashes.uk
+  names:
+    kind: IRSARole
+    plural: irsaroles
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              roleName:
+                type: string
+                description: IAM role name
+              oidcProvider:
+                type: string
+                description: OIDC provider URL without protocol (e.g., 23oak-k8s-oidc.s3.eu-west-2.amazonaws.com)
+              audience:
+                type: string
+                default: "sts.amazonaws.com"
+                description: OIDC audience claim value
+              serviceAccounts:
+                type: array
+                items:
+                  type: string
+                description: Service account names or patterns for the trust policy sub claim
+              managedPolicyNames:
+                type: array
+                items:
+                  type: string
+                description: List of AWS managed policy names. ARN is constructed automatically.
+              policies:
+                type: object
+                additionalProperties:
+                  type: string
+                description: Map of name to IAM policy JSON document for custom policies
+            required:
+            - roleName
+            - oidcProvider
+            - serviceAccounts

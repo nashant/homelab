@@ -1,0 +1,28 @@
+# Namespace-wide ingress: only the opencode pod and private-traefik, only the
+# MCP port. Each server's own policy (<server>/netpolicy.yaml) holds its egress
+# allow-list.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ingress
+  namespace: mcp
+spec:
+  endpointSelector: {}
+  ingress:
+  - fromEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: opencode
+        k8s:app: opencode
+    toPorts:
+    - ports: [{port: "8080", protocol: TCP}]
+  # private-traefik, for the workstation-only routes in ingress.yaml
+  - fromEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: traefik
+        k8s:app.kubernetes.io/instance: private-traefik
+    toPorts:
+    - ports: [{port: "8080", protocol: TCP}]
+  # kubelet probes
+  - fromEntities: [host]
+    toPorts:
+    - ports: [{port: "8080", protocol: TCP}]

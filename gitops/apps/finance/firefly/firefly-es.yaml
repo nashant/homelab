@@ -1,0 +1,32 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: firefly
+  namespace: finance
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: firefly                    # consumed by deployment.yaml, mariadb.yaml, cronjob.yaml
+    creationPolicy: Owner
+    template:
+      type: Opaque
+  data:
+  - secretKey: app-key
+    remoteRef:
+      key: /k8s/firefly/app-key
+  - secretKey: cron-token
+    remoteRef:
+      key: /k8s/firefly/cron-token
+  - secretKey: db-password
+    remoteRef:
+      key: /k8s/firefly/db-password
+  - secretKey: db-root-password
+    remoteRef:
+      key: /k8s/firefly/db-root-password
+  # Firefly Personal Access Token for in-cluster API jobs (bulk maintenance, future Amazon enrichment).
+  - secretKey: api-token
+    remoteRef:
+      key: /k8s/firefly/api-token

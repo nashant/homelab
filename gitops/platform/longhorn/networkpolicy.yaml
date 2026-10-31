@@ -1,0 +1,128 @@
+# Policies for longhorn-system; the default deny is cluster-wide
+# (platform/cilium/default-deny.ccnp.yaml). Peers come from the 2026-10-30 traffic capture plus the
+# chart: the admission webhook, the backup target and the UI ingresses. The engine and replica
+# processes in the instance managers use dynamic ports (10000 and up) between nodes, so traffic
+# inside the namespace is open. iSCSI (3260) comes from the local node, which Cilium always allows.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: longhorn-internal
+  namespace: longhorn-system
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector: {}
+  egress:
+  - to:
+    - podSelector: {}
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: longhorn-manager
+  namespace: longhorn-system
+spec:
+  podSelector:
+    matchLabels:
+      app: longhorn-manager
+  policyTypes: [Ingress]
+  ingress:
+  # Admission webhook, called by the API servers
+  - from:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 9502}
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - {protocol: TCP, port: 9500}
+---
+# Backup target: MinIO on arm64-1 (s3://longhorn@tilehurst/). The manager lists and manages backups;
+# the replica processes in the instance managers move the data. The upgrade checker is off, so
+# nothing needs the internet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backup-target
+  namespace: longhorn-system
+spec:
+  podSelector:
+    matchLabels:
+      longhorn.io/component: instance-manager
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.11/32}
+    ports:
+    - {protocol: TCP, port: 9000}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backup-target-manager
+  namespace: longhorn-system
+spec:
+  podSelector:
+    matchLabels:
+      app: longhorn-manager
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.11/32}
+    ports:
+    - {protocol: TCP, port: 9000}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: longhorn-ui
+  namespace: longhorn-system
+spec:
+  podSelector:
+    matchLabels:
+      app: longhorn-ui
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+    ports:
+    - {protocol: TCP, port: 8000}
+---
+# RWX volumes: the kubelet on any node mounts the share manager's NFS export. None exist yet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: share-manager
+  namespace: longhorn-system
+spec:
+  podSelector:
+    matchLabels:
+      longhorn.io/component: share-manager
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 2049}

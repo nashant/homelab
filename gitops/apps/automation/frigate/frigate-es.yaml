@@ -1,0 +1,20 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: frigate
+  namespace: automation
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: frigate                   # consumed via envFrom: secretRef in deployment.yaml
+    creationPolicy: Owner
+    template:
+      type: Opaque
+  # Pattern B: one JSON SSM param holds all keys (rtsp.env + plus.env merged);
+  # extract maps every JSON key into the Secret, so envFrom picks them all up.
+  dataFrom:
+  - extract:
+      key: /k8s/frigate/config

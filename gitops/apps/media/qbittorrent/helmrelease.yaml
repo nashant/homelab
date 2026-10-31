@@ -1,0 +1,145 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: qbittorrent
+  namespace: media
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: apps-high
+      # raw Deployment had enableServiceLinks true (k8s default)
+      enableServiceLinks: true
+      # platform/vpn vpn-pf finds the pod by PF_TARGET_LABEL=app=qbittorrent (updates the
+      # OPNsense DelugePodIP alias and announce_port), so this label must stay
+      labels:
+        app: qbittorrent
+      annotations:
+        fluentbit.io/parser: qbittorrent
+        # egress via the VPN pool
+        ipam.cilium.io/ip-pool: vpn
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "1"
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            image:
+              repository: lscr.io/linuxserver/qbittorrent
+              tag: 5.1.4-r2-ls443@sha256:3ee43a4d08ce4a0108e4c8150f570544a8c4a4a11e2ca95b86d46006547f80d5
+            env:
+              WEBUI_PORT: "8080"
+              # fixed listen port: OPNsense NATs the PIA forwarded port onto it, never change live
+              TORRENTING_PORT: "59648"
+            ports:
+            - name: http
+              containerPort: 8080
+            - name: torrent-tcp
+              containerPort: 59648
+            probes:
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /
+                    port: 8080
+                  initialDelaySeconds: 30
+                  periodSeconds: 30
+            resources:
+              requests:
+                cpu: "1"
+                memory: 2Gi
+              limits:
+                cpu: "2"
+                memory: 6Gi
+    service:
+      app:
+        controller: main
+        ports:
+          http:
+            port: 8080
+          # legacy ports, kept as live (nothing listens on 6881)
+          torrent-tcp:
+            port: 6881
+          torrent-udp:
+            port: 6881
+            protocol: UDP
+    ingress:
+      private:
+        # live name (single ingress would otherwise be named qbittorrent)
+        forceRename: qbittorrent-private
+        className: private-traefik
+        hosts:
+        - host: &oak qbittorrent.23oak.uk
+          paths: &paths
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: app
+              port: http
+        - host: &nashes qbittorrent.nashes.uk
+          paths: *paths
+        tls:
+        - hosts: [*oak, *nashes]
+    persistence:
+      config:
+        forceRename: qbittorrent-config
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 5Gi
+        globalMounts:
+        - path: /config
+      storage:
+        type: nfs
+        server: 172.16.0.10
+        path: /mnt/storage
+        globalMounts:
+        - path: /mnt/storage
+    networkpolicies:
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: traefik
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: private-traefik
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: radarr
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: sonarr
+            # vpn-pf sets announce_port through the WebUI API
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: vpn
+              podSelector:
+                matchLabels:
+                  app: vpn-pf
+            ports:
+            - {protocol: TCP, port: 8080}
+          # Peers arrive through the PIA port forward
+          - from:
+            - ipBlock:
+                cidr: 0.0.0.0/0
+            ports:
+            - {protocol: TCP, port: 59648}
+            - {protocol: UDP, port: 59648}
+          egress:
+          - to:
+            - ipBlock:
+                cidr: 0.0.0.0/0
+                except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]

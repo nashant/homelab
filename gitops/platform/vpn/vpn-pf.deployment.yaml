@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vpn-pf
+  namespace: vpn
+spec:
+  replicas: 1
+  revisionHistoryLimit: 1
+  selector:
+    matchLabels:
+      app: vpn-pf
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        ipam.cilium.io/ip-pool: vpn
+      labels:
+        app: vpn-pf
+    spec:
+      priorityClassName: platform-high
+      containers:
+      - command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          /scripts/init.sh
+          exec /scripts/run.sh
+        envFrom:
+        - secretRef:
+            name: opnsense-config
+        - secretRef:
+            name: pia-config
+        env:
+        - name: PF_TARGET_ALIAS_NAME
+          value: DelugePodIP
+        - name: PF_PORT_ALIAS_NAME
+          value: PIAPortForward
+        - name: PF_TARGET_NAMESPACE
+          value: media
+        - name: PF_TARGET_LABEL
+          value: app=qbittorrent
+        image: alpine
+        imagePullPolicy: Always
+        name: alpine
+        volumeMounts:
+        - mountPath: /scripts
+          name: scripts
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "1"
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      securityContext: {}
+        # runAsNonRoot: true
+        # runAsUser: 1000
+        # runAsGroup: 1000
+      serviceAccountName: vpn-pf
+      volumes:
+      - configMap:
+          defaultMode: 511
+          name: pia-scripts
+        name: scripts

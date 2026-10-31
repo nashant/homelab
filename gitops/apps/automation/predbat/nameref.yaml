@@ -1,0 +1,9 @@
+# Teach kustomize that the HelmRelease's configMap persistence names a ConfigMap, so the
+# generated predbat-apps-<hash> name is written into it.
+nameReference:
+- kind: ConfigMap
+  version: v1
+  fieldSpecs:
+  - kind: HelmRelease
+    group: helm.toolkit.fluxcd.io
+    path: spec/values/persistence/apps/name

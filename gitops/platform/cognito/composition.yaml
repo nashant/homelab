@@ -1,0 +1,251 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: cognito-oauth
+  labels:
+    crossplane.io/xrd: xcognitooauths.auth.nashes.uk
+spec:
+  compositeTypeRef:
+    apiVersion: auth.nashes.uk/v1alpha1
+    kind: XCognitoOAuth
+  mode: Pipeline
+  pipeline:
+  - step: fetch-extra-resources
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |
+          {{- $xr := .observed.composite.resource }}
+          {{- $spec := $xr.spec }}
+          {{- $namespace := $xr.metadata.namespace }}
+          {{- $data := dict }}
+          ---
+          apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
+          kind: ExtraResources
+          requirements:
+            oauth-ingresses:
+              apiVersion: networking.k8s.io/v1
+              kind: Ingress
+              matchLabels:
+                oauth2.nashes.uk/enabled: "true"
+            google-creds:
+              apiVersion: v1
+              kind: Secret
+              matchLabels:
+                app.kubernetes.io/name: {{ $spec.googleClientSecretRef.name }}
+
+          {{- $ingresses := dig "oauth-ingresses" "items" list (.extraResources | default dict) }}
+          {{- $_ := set $data "ingresses" $ingresses }}
+          {{- $googleCreds := dig "google-creds" "items" (list dict) (.extraResources | default dict) | first }}
+          {{- $_ := set $data "google-creds" $googleCreds }}
+          ---
+          apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
+          kind: Context
+          {{ dict "data" $data | toYaml }}
+
+  - step: create-cognito-resources
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |
+          {{- $xr := .observed.composite.resource }}
+          {{- $spec := $xr.spec }}
+          {{- $region := default "eu-west-2" $spec.region }}
+          {{- $namespace := $xr.metadata.namespace }}
+
+          {{/* Build callback URLs from ingresses */}}
+          {{- $callbackUrls := list (default "https://oauth2.nashes.uk/oauth2/callback" $spec.defaultCallbackUrl) }}
+          {{- $ingresses := dig "ingresses" list .context }}
+          {{- range $ingress := $ingresses }}
+          {{-   range $rule := $ingress.resource.spec.rules }}
+          {{-     if $rule.host }}
+          {{-       $url := printf "https://%s/oauth2/callback" $rule.host }}
+          {{-       if not (has $url $callbackUrls) }}
+          {{-         $callbackUrls = append $callbackUrls $url }}
+          {{-       end }}
+          {{-     end }}
+          {{-   end }}
+          {{- end }}
+
+          {{/* Get Google OAuth credentials from secret */}}
+          {{- $googleCreds := dig "google-creds" "resource" "data" dict .context }}
+          {{- $googleClientId := dig $spec.googleClientSecretRef.idKey "Cg==" $googleCreds | b64dec | trim }}
+          {{- $googleClientSecret := dig $spec.googleClientSecretRef.secretKey "Cg==" $googleCreds | b64dec | trim }}
+
+          ---
+          apiVersion: cognitoidp.aws.m.upbound.io/v1beta1
+          kind: UserPool
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: userpool
+            labels:
+              auth.nashes.uk/userpool: {{ $spec.userPoolName }}
+          spec:
+            providerConfigRef:
+              name: default
+              kind: ClusterProviderConfig
+            forProvider:
+              region: {{ $region }}
+              name: {{ $spec.userPoolName }}
+              autoVerifiedAttributes:
+              - email
+              usernameAttributes:
+              - email
+              usernameConfiguration:
+                caseSensitive: false
+              # No self sign-up: every user comes in through the Google provider.
+              adminCreateUserConfig:
+                allowAdminCreateUserOnly: true
+              accountRecoverySetting:
+                recoveryMechanism:
+                - name: verified_email
+                  priority: 1
+              passwordPolicy:
+                minimumLength: 8
+                requireLowercase: true
+                requireNumbers: true
+                requireSymbols: false
+                requireUppercase: true
+              tags:
+                Environment: prod
+                ManagedBy: crossplane
+
+          ---
+          apiVersion: cognitoidp.aws.m.upbound.io/v1beta1
+          kind: UserPoolDomain
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: domain
+          spec:
+            providerConfigRef:
+              name: default
+              kind: ClusterProviderConfig
+            forProvider:
+              region: {{ $region }}
+              domain: {{ $spec.domain }}
+              userPoolIdSelector:
+                matchLabels:
+                  auth.nashes.uk/userpool: {{ $spec.userPoolName }}
+
+          ---
+          apiVersion: cognitoidp.aws.m.upbound.io/v1beta1
+          kind: UserPoolClient
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: client
+            labels:
+              auth.nashes.uk/client: oauth2-proxy
+          spec:
+            providerConfigRef:
+              name: default
+              kind: ClusterProviderConfig
+            writeConnectionSecretToRef:
+              name: cognito-client-connection
+            forProvider:
+              region: {{ $region }}
+              name: oauth2-proxy
+              userPoolIdSelector:
+                matchLabels:
+                  auth.nashes.uk/userpool: {{ $spec.userPoolName }}
+              generateSecret: true
+              allowedOauthFlowsUserPoolClient: true
+              allowedOauthFlows:
+              - code
+              allowedOauthScopes:
+              - email
+              - openid
+              - profile
+              supportedIdentityProviders:
+              - Google
+              callbackUrls:
+              {{- range $url := $callbackUrls }}
+              - {{ $url }}
+              {{- end }}
+              logoutUrls:
+              - https://oauth2.nashes.uk/oauth2/sign_out
+              preventUserExistenceErrors: ENABLED
+              explicitAuthFlows:
+              - ALLOW_REFRESH_TOKEN_AUTH
+              - ALLOW_USER_SRP_AUTH
+
+          {{- if and $googleClientId $googleClientSecret }}
+          ---
+          apiVersion: cognitoidp.aws.m.upbound.io/v1beta1
+          kind: IdentityProvider
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: google-idp
+          spec:
+            providerConfigRef:
+              name: default
+              kind: ClusterProviderConfig
+            forProvider:
+              region: {{ $region }}
+              providerName: Google
+              providerType: Google
+              userPoolIdSelector:
+                matchLabels:
+                  auth.nashes.uk/userpool: {{ $spec.userPoolName }}
+              providerDetails:
+                client_id: {{ $googleClientId }}
+                client_secret: {{ $googleClientSecret }}
+                authorize_scopes: "email profile openid"
+                attributes_url: "https://people.googleapis.com/v1/people/me?personFields="
+                attributes_url_add_attributes: "true"
+                authorize_url: "https://accounts.google.com/o/oauth2/v2/auth"
+                oidc_issuer: "https://accounts.google.com"
+                token_request_method: "POST"
+                token_url: "https://www.googleapis.com/oauth2/v4/token"
+              attributeMapping:
+                email: email
+                # oauth2-proxy refuses unverified emails; Google's claim says whether it is verified
+                email_verified: email_verified
+                username: sub
+          {{- end }}
+
+          {{/* Create oauth2-proxy credentials secret */}}
+          {{- $cognitoClientId := dig "client" "resource" "status" "atProvider" "id" "" .observed.resources }}
+          {{- $cognitoClientSecret := dig "client" "connectionDetails" "attribute.client_secret" "" .observed.resources }}
+
+          {{/* Get existing cookie-secret from observed secret or generate new one */}}
+          {{- $secretData := dig "oauth-credentials" "resource" "spec" "forProvider" "manifest" "data" dict .observed.resources }}
+          {{- $cookieSecret := dig "cookie-secret" (randAlphaNum 32 | b64enc) $secretData }}
+
+          {{- if and $cognitoClientId $cognitoClientSecret }}
+          ---
+          apiVersion: kubernetes.m.crossplane.io/v1alpha1
+          kind: Object
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: oauth-credentials
+          spec:
+            providerConfigRef:
+              name: default
+              kind: ClusterProviderConfig
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: Secret
+                metadata:
+                  name: cognito-oauth-credentials
+                  namespace: {{ $namespace }}
+                  labels:
+                    app.kubernetes.io/name: cognito-oauth-credentials
+                type: Opaque
+                data:
+                  client-id: {{ $cognitoClientId | b64enc }}
+                  client-secret: {{ $cognitoClientSecret }}
+                  cookie-secret: {{ $cookieSecret }}
+          {{- end }}
+
+  - step: auto-ready
+    functionRef:
+      name: function-auto-ready

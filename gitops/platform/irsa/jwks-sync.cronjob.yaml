@@ -1,0 +1,126 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: jwks-sync
+  namespace: kube-system
+spec:
+  schedule: "*/10 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: jwks-sync   # selected by the "aws" NetworkPolicy in platform/k3s
+        spec:
+          serviceAccountName: jwks-sync
+          restartPolicy: Never
+          containers:
+          - name: sync
+            image: amazon/aws-cli:2.39.2@sha256:5f616172abe56aed540cd2b80ab39833756abf24f1ffbaa487e786ba39ebec1a
+            envFrom:
+            # AWS_REGION, TRUST_ANCHOR_ARN, PROFILE_ARN, ROLE_ARN, written by rolesanywhere-sync
+            - configMapRef:
+                name: jwks-sync-aws
+            env:
+            # No EC2 instance metadata here; stops aws-cli probing 169.254.169.254
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              BUCKET="23oak-k8s-oidc"
+              ISSUER="https://${BUCKET}.s3.${AWS_REGION}.amazonaws.com"
+              HELPER_URL=https://rolesanywhere.amazonaws.com/releases/1.8.5/X86_64/Linux/Amzn2023/aws_signing_helper
+              HELPER_SHA256=beec9ed1c492d93db809890f16713e3556353294b823c2184ad4e891f1b2b54d
+              SA=/var/run/secrets/kubernetes.io/serviceaccount
+              cd "$(mktemp -d)"
+
+              # Fetch JWKS from API server
+              curl -sf --cacert $SA/ca.crt -H "Authorization: Bearer $(cat $SA/token)" \
+                https://kubernetes.default.svc/openid/v1/jwks > keys.json
+
+              # Build discovery document
+              cat > discovery.json <<DISC
+              {
+                "issuer": "${ISSUER}",
+                "jwks_uri": "${ISSUER}/keys.json",
+                "authorization_endpoint": "urn:kubernetes:programmatic_authorization",
+                "response_types_supported": ["id_token"],
+                "subject_types_supported": ["public"],
+                "id_token_signing_alg_values_supported": ["RS256"]
+              }
+              DISC
+
+              # Most runs find both public copies unchanged and stop here, without the helper download. The
+              # 00:00 run (and a job with FORCE set) always uploads, so a broken client certificate or trust
+              # anchor fails a job within a day, not at the next service-account key rotation.
+              same() { [ "$(curl -sf "$ISSUER/$2" | sha256sum)" = "$(sha256sum <"$1")" ]; }
+              force=${FORCE:-}
+              case "$(date -u +%H%M)" in 000?) force=1 ;; esac
+              if [ -z "$force" ] && same keys.json keys.json && same discovery.json .well-known/openid-configuration; then
+                echo "jwks-sync: unchanged"; exit 0
+              fi
+
+              # AWS credentials from IAM Roles Anywhere: the pinned credential helper signs with the client
+              # certificate from cert-manager
+              curl -sfo aws_signing_helper "$HELPER_URL"
+              echo "$HELPER_SHA256  aws_signing_helper" | sha256sum -c --quiet
+              chmod +x aws_signing_helper
+              cat > aws-config <<CFG
+              [default]
+              region = ${AWS_REGION}
+              credential_process = ${PWD}/aws_signing_helper credential-process --certificate /client/tls.crt --private-key /client/tls.key --trust-anchor-arn ${TRUST_ANCHOR_ARN} --profile-arn ${PROFILE_ARN} --role-arn ${ROLE_ARN}
+              CFG
+              export AWS_CONFIG_FILE=$PWD/aws-config
+
+              aws s3 cp discovery.json s3://${BUCKET}/.well-known/openid-configuration \
+                --content-type application/json
+              aws s3 cp keys.json s3://${BUCKET}/keys.json \
+                --content-type application/json
+            volumeMounts:
+            - name: client
+              mountPath: /client
+              readOnly: true
+          volumes:
+          - name: client
+            secret:
+              secretName: jwks-sync-client
+              defaultMode: 0400
+              items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jwks-sync
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: jwks-sync
+rules:
+- nonResourceURLs: ["/openid/v1/jwks", "/.well-known/openid-configuration"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: jwks-sync
+subjects:
+- kind: ServiceAccount
+  name: jwks-sync
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: jwks-sync
+  apiGroup: rbac.authorization.k8s.io

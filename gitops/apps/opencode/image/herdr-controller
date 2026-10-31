@@ -1,0 +1,21 @@
+#!/bin/sh
+# Container entrypoint: an unprivileged sshd that herdr attaches through.
+# herdr starts its own server on first attach and keeps it running.
+set -eu
+
+mkdir -p "$HOME/.ssh/host"
+chmod 700 "$HOME/.ssh"
+key="$HOME/.ssh/host/ssh_host_ed25519_key"
+[ -f "$key" ] || ssh-keygen -q -t ed25519 -N '' -C herdr.nashes.uk -f "$key"
+install -m 600 /etc/herdr/keys/authorized_keys "$HOME/.ssh/authorized_keys"
+
+# Hand the pod's environment to SSH sessions (in-cluster kubectl needs
+# KUBERNETES_SERVICE_*; credential file paths and proxy vars come from the
+# Deployment).
+{
+  env | grep -E '^(KUBERNETES_[A-Z_]+|HASS_TOKEN_FILE|(HTTPS?|NO)_PROXY|(https?|no)_proxy)=' || true
+  echo "PATH=$HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+} > "$HOME/.ssh/environment"
+chmod 600 "$HOME/.ssh/environment"
+
+exec /usr/sbin/sshd -D -e -f /etc/herdr/sshd_config

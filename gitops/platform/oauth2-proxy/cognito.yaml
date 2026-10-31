@@ -1,0 +1,20 @@
+apiVersion: auth.nashes.uk/v1alpha1
+kind: CognitoOAuth
+metadata:
+  name: nashes-oauth
+  namespace: oauth2-proxy
+spec:
+  region: eu-west-2
+  userPoolName: nashes-auth
+  domain: nashes-auth
+  defaultCallbackUrl: https://oauth2.nashes.uk/oauth2/callback
+  googleClientIdSecretRef:
+    name: google-oauth-credentials
+    namespace: oauth2-proxy
+    key: client-id
+  googleClientSecretSecretRef:
+    name: google-oauth-credentials
+    namespace: oauth2-proxy
+    key: client-secret
+  writeConnectionSecretToRef:
+    name: cognito-oauth-credentials

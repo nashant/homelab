@@ -1,0 +1,16 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: tempo-s3
+  namespace: tempo
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: tempo-s3                  # consumed via extraEnvFrom: secretRef
+    creationPolicy: Owner
+  dataFrom:
+  - extract:
+      key: /k8s/tempo/s3

@@ -1,0 +1,28 @@
+apiVersion: platform.nashes.uk/v1alpha1
+kind: IRSARole
+metadata:
+  name: external-secrets
+  namespace: external-secrets
+spec:
+  roleName: external-secrets
+  oidcProvider: 23oak-k8s-oidc.s3.eu-west-2.amazonaws.com
+  serviceAccounts:
+  - external-secrets
+  policies:
+    ssm: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "ssm:GetParameter",
+              "ssm:GetParameters",
+              "ssm:GetParametersByPath"
+            ],
+            "Resource": [
+              "arn:aws:ssm:eu-west-2:079357235350:parameter/k8s/*"
+            ]
+          }
+        ]
+      }

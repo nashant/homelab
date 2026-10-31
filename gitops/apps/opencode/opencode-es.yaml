@@ -1,0 +1,30 @@
+# Every opencode credential, from SSM under /k8s/opencode/. Mounted as files
+# under /opt/secrets (deployment.yaml), never env vars, so the agent's shells
+# and the repo code it runs don't inherit them.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: opencode
+  namespace: opencode
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: opencode
+    creationPolicy: Owner
+  data:
+  - secretKey: zai-api-key        # provider zai-coding-plan + zai-failover quota polling
+    remoteRef:
+      key: /k8s/opencode/zai-api-key
+  - secretKey: openrouter-api-key # zai-failover's failover provider
+    remoteRef:
+      key: /k8s/opencode/openrouter-api-key
+  - secretKey: server-password    # HTTP basic auth for the web UI / `opencode --server`
+    remoteRef:
+      key: /k8s/opencode/server-password
+  - secretKey: hass-token         # Home Assistant long-lived access token
+    remoteRef:
+      key: /k8s/opencode/hass-token
+# GitHub: no stored token; short-lived ones come from octo-sts (deployment.yaml).

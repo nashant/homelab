@@ -1,0 +1,58 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: seaweedfs
+  namespace: seaweedfs
+spec:
+  releaseName: seaweedfs
+  interval: 10m
+  timeout: 20m
+  chart:
+    spec:
+      chart: seaweedfs
+      version: "4.30.0"
+      sourceRef:
+        kind: HelmRepository
+        name: seaweedfs
+        namespace: flux-system
+      interval: 1m
+  dependsOn:
+  - namespace: longhorn-system
+    name: longhorn
+  values:
+    master:
+      priorityClassName: platform-high
+      replicas: 1
+      data:
+        type: persistentVolumeClaim
+        storageClass: longhorn
+        size: 2Gi
+    filer:
+      priorityClassName: platform-high
+      replicas: 1
+      data:
+        type: persistentVolumeClaim
+        storageClass: longhorn
+        size: 5Gi
+      s3:
+        enabled: false
+    volume:
+      priorityClassName: platform-high
+      replicas: 1
+      extraArgs:
+      - -disk=ssd
+      dataDirs:
+      - name: data1
+        type: persistentVolumeClaim
+        storageClass: longhorn
+        size: 60Gi
+        maxVolumes: 0
+    s3:
+      priorityClassName: platform-high
+      enabled: true
+      enableAuth: true
+      existingConfigSecret: seaweedfs-s3-secret
+    cosi:
+      enabled: false
+    sftp:
+      enabled: false

@@ -1,0 +1,71 @@
+# oauth2-proxy session store. The browser then carries a short ticket cookie instead of
+# the whole encrypted Cognito token set. Each session is encrypted with a per-session
+# secret held only in that ticket, so nothing here is readable without the cookie.
+# No persistence: a restart signs everyone out once, and Cognito signs them straight back in.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: oauth2-proxy-redis
+  namespace: oauth2-proxy
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: platform-high
+      securityContext:
+        # the image's redis user; runAsNonRoot needs the uid
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            image:
+              repository: docker.io/library/redis
+              tag: 7.4.11@sha256:4fa24486b8bcca8eec45ee0eb166edc674795e53a2b53d1a9ef263eecebaac85
+            args: ["--save", "", "--appendonly", "no"]
+            probes:
+              liveness: &probe
+                enabled: true
+                custom: true
+                spec:
+                  exec:
+                    command: ["redis-cli", "ping"]
+                  periodSeconds: 10
+              readiness: *probe
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: [ALL]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 16Mi
+              limits:
+                memory: 128Mi
+    persistence:
+      data:
+        type: emptyDir
+        globalMounts:
+        - path: /data
+    service:
+      app:
+        controller: main
+        ports:
+          redis:
+            port: 6379
+    networkpolicies:
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: oauth2-proxy
+            ports:
+            - {protocol: TCP, port: 6379}
+          egress: []

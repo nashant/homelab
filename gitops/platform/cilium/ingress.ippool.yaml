@@ -1,0 +1,11 @@
+# Pod IPs for the Traefik pods only (they opt in with ipam.cilium.io/ip-pool: ingress), so apps can
+# trust "the ingress" by source range: Grafana's auth.proxy whitelist and Home Assistant's
+# trusted_proxies both list 172.30.16.0/26. One /28 per node.
+apiVersion: cilium.io/v2alpha1
+kind: CiliumPodIPPool
+metadata:
+  name: ingress
+spec:
+  ipv4:
+    cidrs: [172.30.16.0/26]
+    maskSize: 28

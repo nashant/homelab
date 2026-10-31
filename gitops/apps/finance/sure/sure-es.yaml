@@ -1,0 +1,29 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: sure
+  namespace: finance
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: sure                       # consumed by deployment.yaml and db.deployment.yaml
+    creationPolicy: Owner
+    template:
+      type: Opaque
+  data:
+  # Rails signing/encryption key. Rotating it invalidates every session and any
+  # ActiveRecord-encrypted column — treat as permanent once data exists.
+  - secretKey: secret-key-base
+    remoteRef:
+      key: /k8s/sure/secret-key-base
+  - secretKey: db-password
+    remoteRef:
+      key: /k8s/sure/db-password
+  # Static bearer token for the /mcp endpoint. Pairs with MCP_USER_EMAIL in configmap.yaml,
+  # which must name a real account or the endpoint 401s (docs/hosting/mcp.md).
+  - secretKey: mcp-api-token
+    remoteRef:
+      key: /k8s/sure/mcp-api-token

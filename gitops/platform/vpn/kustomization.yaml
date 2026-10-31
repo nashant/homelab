@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: vpn
+resources:
+- namespace.yaml
+- rbac.yaml
+- vpn-pf.deployment.yaml
+- networkpolicy.yaml
+configMapGenerator:
+- name: pia-scripts
+  files:
+  - ca.rsa.4096.crt
+  - init.sh
+  - run.sh
+  - utils.sh
+  options:
+    disableNameSuffixHash: true

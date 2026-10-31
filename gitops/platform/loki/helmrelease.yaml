@@ -1,0 +1,115 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: loki
+  namespace: loki
+spec:
+  releaseName: loki
+  interval: 10m
+  timeout: 20m
+  chart:
+    spec:
+      chart: loki
+      # grafana/loki 7.x is the Enterprise chart; the OSS chart continues as grafana-community/loki.
+      version: 20.1.0
+      sourceRef:
+        kind: HelmRepository
+        name: grafana-community
+        namespace: flux-system
+      interval: 1m
+  dependsOn:
+  - namespace: longhorn-system
+    name: longhorn
+  - namespace: seaweedfs
+    name: seaweedfs
+  values:
+    deploymentMode: SingleBinary
+
+    loki:
+      auth_enabled: false
+      # No usage reports to stats.grafana.org (the network policy blocks them too)
+      analytics:
+        reporting_enabled: false
+      commonConfig:
+        replication_factor: 1
+      schemaConfig:
+        configs:
+        - from: "2024-04-01"
+          store: tsdb
+          object_store: s3
+          schema: v13
+          index:
+            prefix: loki_index_
+            period: 24h
+      storage:
+        type: s3
+        bucketNames:
+          chunks: loki
+          ruler: loki
+          admin: loki
+        s3:
+          endpoint: seaweedfs-s3.seaweedfs:8333
+          region: us-east-1
+          accessKeyId: ${S3_ACCESS_KEY_ID}
+          secretAccessKey: ${S3_SECRET_ACCESS_KEY}
+          s3ForcePathStyle: true
+          insecure: true
+      limits_config:
+        retention_period: 4320h          # 180d
+        ingestion_rate_mb: 16
+        ingestion_burst_size_mb: 32
+        max_streams_per_user: 0
+      compactor:
+        retention_enabled: true
+        delete_request_store: s3
+      tracing:
+        enabled: false
+
+    singleBinary:
+      replicas: 1
+      # S3 (obs) creds come from the loki-s3 secret as env; the chart always passes
+      # -config.expand-env=true, which expands ${S3_*} — so no creds in the config ConfigMap.
+      extraEnvFrom:
+      - secretRef:
+          name: loki-s3
+      # Chunks/index now live in S3; this PVC only holds the WAL + local cache.
+      persistence:
+        enabled: true
+        storageClass: longhorn
+        size: 10Gi
+        accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          memory: 2Gi
+
+    # Disable scalable-only components in single-binary mode.
+    backend:
+      replicas: 0
+    read:
+      replicas: 0
+    write:
+      replicas: 0
+
+    chunksCache:
+      enabled: false
+    resultsCache:
+      enabled: false
+
+    gateway:
+      enabled: false
+
+    monitoring:
+      serviceMonitor:
+        enabled: true
+        labels:
+          release: kube-prometheus
+
+    lokiCanary:
+      enabled: false
+
+    test:
+      enabled: false

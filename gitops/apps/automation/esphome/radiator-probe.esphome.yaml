@@ -1,0 +1,107 @@
+# Radiator ΔT probe: one ESP32-C3 SuperMini + two DS18B20 per radiator, plus one on the boiler.
+# This file is a TEMPLATE for the ESPHome dashboard (PVC), not a kustomize resource.
+# Copy it into the dashboard once per board and change ONLY the substitutions block; for the
+# boiler board also delete the `number:` block at the end (the boiler has no lockshield).
+# Procedure and wiring: RADIATOR-BALANCING.md (same directory).
+#
+# radbalance reads each board directly over ESPHome's web_server (https://esphome.io/web-api/):
+# the SSE stream /events, and POST /number/Lockshield%20turns/set?value=<turns>. It finds the
+# entities by name, as ids "sensor/Probe A", "sensor/Probe B" and "number/Lockshield turns"
+# (the domain/name id form since ESPHome 2026.8.0, hence min_version), so do not rename them.
+# There is no native `api:`: nothing uses it, and dropping it frees RAM for the web server.
+# Boards are numbered, not named after radiators: which radiator a board sits on is recorded in
+# the radbalance app, and which probe is the inlet is the hotter one at each reading.
+
+substitutions:
+  board: "01"                           # two digits; device and host name become rad-01
+  probe_a_address: "0x0000000000000000" # from the first boot log (hub scan), see doc step 2
+  probe_b_address: "0x0000000000000000"
+  probe_a_offset: "0.0"                 # per-probe calibration from the mug test, doc step 3
+  probe_b_offset: "0.0"
+  one_wire_pin: GPIO4
+  sample_interval: 15s
+  turns_max: "12"                       # the Lockshield turns number's max: the house model's ceiling (Lockshield.turns_max le=12)
+
+esphome:
+  name: rad-${board}
+  friendly_name: "Radiator ${board}"
+  min_version: 2026.8.0
+
+esp32:
+  variant: esp32c3
+  framework:
+    type: esp-idf
+
+logger:
+
+web_server:
+  port: 80
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: NONE
+  # Some SuperMini batches have a badly tuned antenna. If a board shows poor RSSI,
+  # lowering TX power is the usual fix (valid range 8.5dB to 20.5dB):
+  # output_power: 8.5dB
+  ap:
+    ssid: "rad-${board} fallback"
+
+one_wire:
+  - platform: gpio
+    pin: ${one_wire_pin}
+
+sensor:
+  - platform: dallas_temp
+    id: probe_a
+    address: ${probe_a_address}
+    name: "Probe A"
+    update_interval: ${sample_interval}
+    filters:
+      - offset: ${probe_a_offset}
+
+  - platform: dallas_temp
+    id: probe_b
+    address: ${probe_b_address}
+    name: "Probe B"
+    update_interval: ${sample_interval}
+    filters:
+      - offset: ${probe_b_offset}
+
+  # Signed A minus B. The app decides which is the inlet, so the sign is informational.
+  - platform: template
+    name: "Delta A-B"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: ${sample_interval}
+    lambda: |-
+      if (isnan(id(probe_a).state) || isnan(id(probe_b).state)) return NAN;
+      return id(probe_a).state - id(probe_b).state;
+
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+
+# The radiator's lockshield setting, kept in flash so it outlives the app, the server and the
+# phone (radbalance spec 7.2). radbalance writes it after every confirmation and counts it saved
+# only when this board reports the value back; a value outside 0..turns_max is ignored by
+# ESPHome. Flash is written on ESPHome's flash_write_interval (default 1 min), so a turn confirmed
+# just before a power cut can be lost. A board that has never stored a value starts at
+# turns_max, which radbalance proposes only if it is within the radiator's own travel.
+number:
+  - platform: template
+    id: lockshield_turns
+    name: "Lockshield turns"
+    optimistic: true
+    restore_value: true
+    initial_value: ${turns_max}
+    min_value: 0
+    max_value: ${turns_max}
+    step: 0.125
+    mode: box

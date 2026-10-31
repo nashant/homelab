@@ -1,0 +1,58 @@
+# jwks-sync gets AWS credentials from IAM Roles Anywhere with a client certificate, not from IRSA, so it
+# can still publish the OIDC keys after a service-account key rotation. A self-signed CA (the Roles
+# Anywhere trust anchor, kept in step by rolesanywhere-sync) issues a short-lived client certificate
+# that cert-manager renews.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: jwks-sync-selfsigned
+  namespace: kube-system
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: jwks-sync-ca
+  namespace: kube-system
+spec:
+  isCA: true
+  commonName: homelab-jwks-sync-ca
+  duration: 175200h      # 20 years; a new CA is picked up by rolesanywhere-sync
+  secretName: jwks-sync-ca
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    kind: Issuer
+    name: jwks-sync-selfsigned
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: jwks-sync-ca
+  namespace: kube-system
+spec:
+  ca:
+    secretName: jwks-sync-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: jwks-sync
+  namespace: kube-system
+spec:
+  commonName: jwks-sync    # the jwks-sync role trusts this CN from this issuer only
+  duration: 720h
+  renewBefore: 240h
+  secretName: jwks-sync-client
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+  - digital signature
+  - client auth
+  issuerRef:
+    kind: Issuer
+    name: jwks-sync-ca

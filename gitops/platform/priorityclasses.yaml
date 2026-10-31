@@ -1,0 +1,27 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: platform-critical
+preemptionPolicy: PreemptLowerPriority
+value: 90009000
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: platform-high
+preemptionPolicy: PreemptLowerPriority
+value: 90000000
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: apps-critical
+preemptionPolicy: PreemptLowerPriority
+value: 50005000
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: apps-high
+preemptionPolicy: PreemptLowerPriority
+value: 50000000

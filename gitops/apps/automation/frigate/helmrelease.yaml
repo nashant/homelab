@@ -1,0 +1,204 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: frigate
+  namespace: automation
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: apps-critical
+      annotations:
+        fluentbit.io/parser: frigate
+      labels:
+        app: frigate   # plex's podAntiAffinity selects on this
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "1"
+      nodeSelector:
+        feature.node.kubernetes.io/coral-tpu: "true"
+        kubernetes.io/hostname: amd64-3
+      securityContext:
+        # runs as root; the pre-chart pod had no seccomp profile (Unconfined)
+        runAsNonRoot: false
+        seccompProfile:
+          type: Unconfined
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            nameOverride: frigate
+            image:
+              repository: ghcr.io/blakeblackshear/frigate
+              tag: 0.18.2@sha256:fd60f99ffd4eb6c42360ed4e14953e270586f239309ab3983e55b2e97ffac09a
+            env:
+              OPENAI_BASE_URL: https://openrouter.ai/api/v1
+            envFrom:
+            # rtsp + Frigate+ keys, synced from SSM by frigate-es.yaml
+            - secretRef:
+                name: frigate
+                optional: false
+            ports:
+            - name: http
+              containerPort: 5000
+            - name: rtsp
+              containerPort: 8554
+            - name: go2rtc
+              containerPort: 1984
+            probes:
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api
+                    port: 5000
+                  initialDelaySeconds: 20
+                  periodSeconds: 10
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api
+                    port: 5000
+                  initialDelaySeconds: 20
+                  periodSeconds: 10
+            resources:
+              requests:
+                cpu: "3"
+                memory: 16G
+                gpu.intel.com/i915: "2"
+                devic.es/coral: "1"
+              limits:
+                memory: 16G
+                gpu.intel.com/i915: "2"
+                devic.es/coral: "1"   # /dev/apex_0 via platform/generic-device-plugin
+    service:
+      app:
+        controller: main
+        labels:
+          app: frigate   # the frigate ServiceMonitor selects on this
+        ports:
+          http:
+            port: 5000
+    ingress:
+      public:
+        className: public-traefik
+        annotations:
+          traefik.ingress.kubernetes.io/router.middlewares: oauth2-proxy-oauth2-proxy@kubernetescrd
+          external-dns.alpha.kubernetes.io/target: home.nashes.uk
+        hosts:
+        - host: &nashes frigate.nashes.uk
+          paths: &paths
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: app
+              port: http
+        tls:
+        - hosts: [*nashes]
+      private:
+        className: private-traefik
+        hosts:
+        - host: &oak frigate.23oak.uk
+          paths: *paths
+        - host: *nashes
+          paths: *paths
+        tls:
+        - hosts: [*oak, *nashes]
+    persistence:
+      config:
+        forceRename: frigate-config
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 5Gi
+        globalMounts:
+        - path: /config
+      media:
+        # recordings on amd64-1's /mnt/4TB-1 (export all_squash to 1000:1000)
+        type: nfs
+        server: 172.16.0.10
+        path: /mnt/4TB-1/automation/frigate
+        globalMounts:
+        - path: /media/frigate
+      dev-shm:
+        type: emptyDir
+        medium: Memory
+        sizeLimit: 1G
+        globalMounts:
+        - path: /dev/shm
+      cache:
+        type: emptyDir
+        medium: Memory
+        sizeLimit: 2G
+        globalMounts:
+        - path: /tmp/cache
+      localtime:
+        type: hostPath
+        hostPath: /etc/localtime
+        globalMounts:
+        - path: /etc/localtime
+          readOnly: true
+      ffmpeg8:
+        type: hostPath
+        hostPath: /opt/ffmpeg/8.0
+        globalMounts:
+        - path: /usr/lib/ffmpeg/8.0
+          readOnly: true
+    # Peers from the 2026-10-28 and 2026-10-30 traffic captures. HA is hostNetwork, so it
+    # arrives from the node IPs.
+    networkpolicies:
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: traefik
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: traefik
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: monitoring
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: prometheus
+            - ipBlock: {cidr: 172.16.0.10/32}
+            - ipBlock: {cidr: 172.16.0.12/32}
+            - ipBlock: {cidr: 172.16.0.13/32}
+            ports:
+            - {protocol: TCP, port: 5000}
+          egress:
+          # The 7 cameras: HTTP API, RTSP and Reolink Baichuan (go2rtc reolink_protocol).
+          # A new camera needs its IP here.
+          - to:
+            - ipBlock: {cidr: 172.16.0.41/32}
+            - ipBlock: {cidr: 172.16.0.43/32}
+            - ipBlock: {cidr: 172.16.0.44/32}
+            - ipBlock: {cidr: 172.16.0.45/32}
+            - ipBlock: {cidr: 172.16.0.47/32}
+            - ipBlock: {cidr: 172.16.0.48/32}
+            - ipBlock: {cidr: 172.16.0.49/32}
+            ports:
+            - {protocol: TCP, port: 80}
+            - {protocol: TCP, port: 554}
+            - {protocol: TCP, port: 9000}
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: mqtt
+            ports:
+            - {protocol: TCP, port: 1883}
+          # Frigate+ and the OpenRouter GenAI API
+          - to:
+            - ipBlock:
+                cidr: 0.0.0.0/0
+                except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+            ports:
+            - {protocol: TCP, port: 443}

@@ -1,0 +1,67 @@
+# Firefly III Data Importer on the official chart — separate web app that talks to Firefly over HTTP.
+# Auth: public OAuth client (FIREFLY_III_CLIENT_ID); every importer session logs in via Firefly.
+# The chart has no sidecar or multi-port support, so the /upload helper page runs as its own
+# Deployment (upload-helper.yaml) and the ingress stays a plain manifest (importer.ingress.yaml).
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: firefly-importer
+  namespace: finance
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: importer
+      version: 1.6.1
+      sourceRef:
+        kind: HelmRepository
+        name: firefly-iii
+        namespace: flux-system
+      interval: 1h
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+      strategy: rollback
+  driftDetection:
+    mode: warn
+  values:
+    fullnameOverride: firefly-importer
+    image:
+      repository: fireflyiii/data-importer
+      tag: version-2.3.5@sha256:59f2f26ddf6eb55e84ce0d571259c9aabd6ddfcc23dd4d3825ab01ad79e34930
+    fireflyiii:
+      # In-cluster URL the importer pod uses for API calls and the OAuth code exchange.
+      url: http://firefly:8080
+      # URL the browser is sent to for the OAuth login and for links back to Firefly.
+      vanityUrl: https://firefly.nashes.uk
+    trustedProxies: "**"
+    config:
+      env:
+        # Pod network is IPv4-only (Cilium); same fix as the core deployment.
+        NGINX_LISTEN_IP_PROTOCOL: ipv4
+        # Public (non-confidential) OAuth client created in Firefly, redirect URL
+        # https://firefly-importer.nashes.uk/callback. Not a secret.
+        FIREFLY_III_CLIENT_ID: 01a06710-c895-7077-ae22-241a2d2cbde0
+        TZ: Europe/London
+        IGNORE_DUPLICATE_ERRORS: "false"
+      files: []
+    service:
+      port: 8080
+    livenessProbe: null
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: http
+      initialDelaySeconds: 20
+      periodSeconds: 10
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi

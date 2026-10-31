@@ -1,0 +1,33 @@
+# Backup target is MinIO on arm64-1 (helmrelease.yaml defaultBackupStore).
+# It is an RPi4 + USB HDD measuring ~10 MB/s sustained write (the disk, not the
+# gigabit link, is the ceiling) — hence concurrency 1 and a `nightly` group that
+# excludes transcode scratch and observability volumes. Tier-1 is ~104G (~3h full).
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: nightly-backup
+  namespace: longhorn-system
+spec:
+  cron: "0 1 * * *"
+  task: backup
+  # a Longhorn backup IS an uploaded snapshot, so this also caps local snapshots
+  retain: 7
+  concurrency: 1
+  groups:
+  - nightly
+---
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: daily-snapshot-cleanup
+  namespace: longhorn-system
+spec:
+  # Longhorn only auto-assigns a volume to `default` while it has NO recurring
+  # job, so labelling a volume into `nightly` drops it out of `default`.
+  cron: "0 5 * * *"
+  task: snapshot-cleanup
+  retain: 0
+  concurrency: 1
+  groups:
+  - default
+  - nightly

@@ -1,0 +1,158 @@
+# rolesanywhere-sync keeps the IAM Roles Anywhere trust anchor and profile for jwks-sync in step with the
+# cert-manager CA (the Upbound AWS provider has no trust anchor resource, and its profile has no region
+# field), then writes their ARNs to ConfigMap jwks-sync-aws for jwks-sync. It uses IRSA: it is only
+# needed to create the anchor and to follow a CA change, so a key rotation never blocks jwks-sync.
+apiVersion: platform.nashes.uk/v1alpha1
+kind: IRSARole
+metadata:
+  name: rolesanywhere-sync
+  namespace: kube-system
+spec:
+  roleName: rolesanywhere-sync
+  oidcProvider: 23oak-k8s-oidc.s3.eu-west-2.amazonaws.com
+  serviceAccounts:
+  - rolesanywhere-sync
+  policies:
+    rolesanywhere: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "rolesanywhere:ListTrustAnchors", "rolesanywhere:CreateTrustAnchor", "rolesanywhere:GetTrustAnchor",
+              "rolesanywhere:UpdateTrustAnchor", "rolesanywhere:EnableTrustAnchor",
+              "rolesanywhere:ListProfiles", "rolesanywhere:CreateProfile", "rolesanywhere:GetProfile",
+              "rolesanywhere:UpdateProfile", "rolesanywhere:EnableProfile", "rolesanywhere:TagResource"
+            ],
+            "Resource": "*"
+          },
+          {"Effect": "Allow", "Action": "iam:PassRole", "Resource": "arn:aws:iam::079357235350:role/jwks-sync"},
+          {
+            "Effect": "Allow",
+            "Action": "iam:CreateServiceLinkedRole",
+            "Resource": "arn:aws:iam::079357235350:role/aws-service-role/rolesanywhere.amazonaws.com/AWSServiceRoleForRolesAnywhere",
+            "Condition": {"StringEquals": {"iam:AWSServiceName": "rolesanywhere.amazonaws.com"}}
+          }
+        ]
+      }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rolesanywhere-sync
+  namespace: kube-system
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::079357235350:role/rolesanywhere-sync
+---
+# Filled by rolesanywhere-sync (server-side apply of .data only), read by jwks-sync.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jwks-sync-aws
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rolesanywhere-sync
+  namespace: kube-system
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["jwks-sync-aws"]
+  verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rolesanywhere-sync
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: rolesanywhere-sync
+subjects:
+- kind: ServiceAccount
+  name: rolesanywhere-sync
+  namespace: kube-system
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rolesanywhere-sync
+  namespace: kube-system
+spec:
+  schedule: "17 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: rolesanywhere-sync   # selected by the "aws" NetworkPolicy in platform/k3s
+        spec:
+          serviceAccountName: rolesanywhere-sync
+          restartPolicy: Never
+          containers:
+          - name: sync
+            image: amazon/aws-cli:2.39.2@sha256:5f616172abe56aed540cd2b80ab39833756abf24f1ffbaa487e786ba39ebec1a
+            env:
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              R=eu-west-2 NAME=jwks-sync ROLE_ARN=arn:aws:iam::079357235350:role/jwks-sync
+              ra() { aws rolesanywhere --region $R "$@"; }
+              pem=$(cat /ca/tls.crt)
+              src="{\"sourceType\":\"CERTIFICATE_BUNDLE\",\"sourceData\":{\"x509CertificateData\":\"$(awk '{printf "%s\\n", $0}' /ca/tls.crt)\"}}"
+
+              ta=$(ra list-trust-anchors --query "trustAnchors[?name=='$NAME'].trustAnchorId | [0]" --output text)
+              if [ "$ta" = None ]; then
+                ta=$(ra create-trust-anchor --name $NAME --enabled --source "$src" --query trustAnchor.trustAnchorId --output text)
+                echo "created trust anchor $ta"
+              else
+                cur=$(ra get-trust-anchor --trust-anchor-id $ta --query trustAnchor.source.sourceData.x509CertificateData --output text)
+                if [ "$(tr -d ' \r\n' <<<"$cur")" != "$(tr -d ' \r\n' <<<"$pem")" ]; then
+                  ra update-trust-anchor --trust-anchor-id $ta --source "$src" >/dev/null; echo "trust anchor: CA updated"
+                fi
+                [ "$(ra get-trust-anchor --trust-anchor-id $ta --query trustAnchor.enabled --output text)" = True ] \
+                  || { ra enable-trust-anchor --trust-anchor-id $ta >/dev/null; echo "trust anchor: enabled"; }
+              fi
+              ta_arn=$(ra get-trust-anchor --trust-anchor-id $ta --query trustAnchor.trustAnchorArn --output text)
+
+              pid=$(ra list-profiles --query "profiles[?name=='$NAME'].profileId | [0]" --output text)
+              if [ "$pid" = None ]; then
+                pid=$(ra create-profile --name $NAME --role-arns $ROLE_ARN --duration-seconds 3600 --enabled --query profile.profileId --output text)
+                echo "created profile $pid"
+              else
+                [ "$(ra get-profile --profile-id $pid --query 'profile.roleArns[0]' --output text)" = "$ROLE_ARN" ] \
+                  || { ra update-profile --profile-id $pid --role-arns $ROLE_ARN >/dev/null; echo "profile: role updated"; }
+                [ "$(ra get-profile --profile-id $pid --query profile.enabled --output text)" = True ] \
+                  || { ra enable-profile --profile-id $pid >/dev/null; echo "profile: enabled"; }
+              fi
+              p_arn=$(ra get-profile --profile-id $pid --query profile.profileArn --output text)
+
+              SA=/var/run/secrets/kubernetes.io/serviceaccount
+              body="{\"apiVersion\":\"v1\",\"kind\":\"ConfigMap\",\"metadata\":{\"name\":\"jwks-sync-aws\",\"namespace\":\"kube-system\"},\"data\":{\"AWS_REGION\":\"$R\",\"TRUST_ANCHOR_ARN\":\"$ta_arn\",\"PROFILE_ARN\":\"$p_arn\",\"ROLE_ARN\":\"$ROLE_ARN\"}}"
+              curl -sf --cacert $SA/ca.crt -H "Authorization: Bearer $(cat $SA/token)" -H 'Content-Type: application/apply-patch+yaml' \
+                -X PATCH "https://kubernetes.default.svc/api/v1/namespaces/kube-system/configmaps/jwks-sync-aws?fieldManager=rolesanywhere-sync&force=true" \
+                --data "$body" >/dev/null
+              echo "jwks-sync-aws: anchor=$ta_arn profile=$p_arn"
+            volumeMounts:
+            - name: ca
+              mountPath: /ca
+              readOnly: true
+          volumes:
+          - name: ca
+            secret:
+              secretName: jwks-sync-ca
+              items:
+              - key: tls.crt     # the CA certificate only, not its private key
+                path: tls.crt

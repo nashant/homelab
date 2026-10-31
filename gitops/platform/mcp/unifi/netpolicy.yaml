@@ -1,0 +1,22 @@
+# Egress: DNS and the UniFi OS Server UI/API port.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: unifi
+spec:
+  endpointSelector:
+    matchLabels:
+      app: unifi
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s:k8s-app: kube-dns
+    toPorts:
+    - ports: [{port: "53", protocol: ANY}]
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: unifi
+        k8s:app: unifi-os-server
+    toPorts:
+    - ports: [{port: "443", protocol: TCP}]

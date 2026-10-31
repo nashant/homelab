@@ -1,0 +1,129 @@
+# Guards on what the opencode SA may create in the namespaces rbac.yaml lets it
+# write. Applies to the opencode SA's own requests only; pods created later by
+# controllers are covered by checking the workload's pod template here.
+# The agent can't edit these (admissionregistration is read-only in rbac.yaml).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: opencode-workloads
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: [""]
+      apiVersions: ["*"]
+      operations: [CREATE, UPDATE]
+      resources: [pods, pods/ephemeralcontainers, replicationcontrollers, podtemplates]
+    - apiGroups: [apps]
+      apiVersions: ["*"]
+      operations: [CREATE, UPDATE]
+      resources: [deployments, replicasets, statefulsets, daemonsets]
+    - apiGroups: [batch]
+      apiVersions: ["*"]
+      operations: [CREATE, UPDATE]
+      resources: [jobs, cronjobs]
+  matchConditions:
+  - name: opencode-sa
+    expression: request.userInfo.username == 'system:serviceaccount:opencode:opencode'
+  variables:
+  - name: spec
+    expression: >-
+      object.kind == 'Pod' ? object.spec :
+      object.kind == 'PodTemplate' ? object.template.spec :
+      object.kind == 'CronJob' ? object.spec.jobTemplate.spec.template.spec :
+      object.spec.template.spec
+  - name: containers
+    expression: >-
+      (has(variables.spec.containers) ? variables.spec.containers : []) +
+      (has(variables.spec.initContainers) ? variables.spec.initContainers : []) +
+      (has(variables.spec.ephemeralContainers) ? variables.spec.ephemeralContainers : [])
+  validations:
+  - expression: >-
+      !(has(variables.spec.hostNetwork) && variables.spec.hostNetwork) &&
+      !(has(variables.spec.hostPID) && variables.spec.hostPID) &&
+      !(has(variables.spec.hostIPC) && variables.spec.hostIPC)
+    message: opencode may not use hostNetwork/hostPID/hostIPC
+  - expression: "!has(variables.spec.volumes) || variables.spec.volumes.all(v, !has(v.hostPath))"
+    message: opencode may not use hostPath volumes
+  - expression: >-
+      variables.containers.all(c, !has(c.securityContext) ||
+        ((!has(c.securityContext.privileged) || !c.securityContext.privileged) &&
+         (!has(c.securityContext.procMount) || c.securityContext.procMount == 'Default') &&
+         (!has(c.securityContext.seccompProfile) || c.securityContext.seccompProfile.type != 'Unconfined')))
+    message: opencode may not run privileged, unmasked or seccomp-unconfined containers
+  - expression: >-
+      !has(variables.spec.securityContext) || !has(variables.spec.securityContext.seccompProfile) ||
+      variables.spec.securityContext.seccompProfile.type != 'Unconfined'
+    message: opencode may not run seccomp-unconfined pods
+  # The Pod Security "baseline" capability set
+  - expression: >-
+      variables.containers.all(c, !has(c.securityContext) || !has(c.securityContext.capabilities) ||
+        !has(c.securityContext.capabilities.add) ||
+        c.securityContext.capabilities.add.all(x, x in ['AUDIT_WRITE', 'CHOWN', 'DAC_OVERRIDE', 'FOWNER',
+          'FSETID', 'KILL', 'MKNOD', 'NET_BIND_SERVICE', 'SETFCAP', 'SETGID', 'SETPCAP', 'SETUID', 'SYS_CHROOT']))
+    message: opencode may only add Pod Security baseline capabilities
+  - expression: >-
+      variables.containers.all(c, !has(c.ports) || c.ports.all(p, !has(p.hostPort) || p.hostPort == 0))
+    message: opencode may not use hostPorts
+  # Its own namespace keeps the gVisor boundary
+  - expression: >-
+      request.namespace != 'opencode' ||
+      (has(variables.spec.runtimeClassName) && variables.spec.runtimeClassName == 'runsc')
+    message: pods in the opencode namespace must use runtimeClassName runsc
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: opencode-workloads
+spec:
+  policyName: opencode-workloads
+  validationActions: [Deny]
+---
+# No public exposure (public-traefik, UPnP port forwards, externalIPs) and no
+# IRSA role annotations on ServiceAccounts.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: opencode-exposure
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: [""]
+      apiVersions: ["*"]
+      operations: [CREATE, UPDATE]
+      resources: [services, serviceaccounts]
+    - apiGroups: [networking.k8s.io]
+      apiVersions: ["*"]
+      operations: [CREATE, UPDATE]
+      resources: [ingresses]
+  matchConditions:
+  - name: opencode-sa
+    expression: request.userInfo.username == 'system:serviceaccount:opencode:opencode'
+  variables:
+  - name: annotations
+    expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
+  validations:
+  - expression: >-
+      object.kind != 'Service' ||
+      ((!has(object.spec.externalIPs) || size(object.spec.externalIPs) == 0) &&
+       !variables.annotations.exists(k, k.contains('upnp')))
+    message: opencode may not set externalIPs or UPnP annotations on Services
+  - expression: >-
+      object.kind != 'Ingress' ||
+      ((!has(object.spec.ingressClassName) || object.spec.ingressClassName != 'public-traefik') &&
+       (!('kubernetes.io/ingress.class' in variables.annotations) ||
+        variables.annotations['kubernetes.io/ingress.class'] != 'public-traefik'))
+    message: opencode may not create public-traefik ingresses
+  - expression: >-
+      object.kind != 'ServiceAccount' ||
+      !variables.annotations.exists(k, k == 'eks.amazonaws.com/role-arn')
+    message: opencode may not annotate ServiceAccounts with IRSA roles
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: opencode-exposure
+spec:
+  policyName: opencode-exposure
+  validationActions: [Deny]

@@ -1,0 +1,24 @@
+# NOT in kustomization.yaml yet. creationPolicy Owner would adopt and overwrite the hand-made
+# actualbudget-lunchflow-config secret, so populate the SSM parameter first, then add this file
+# to resources.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: actual-flow
+  namespace: finance
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: actualbudget-lunchflow-config   # consumed by cronjob.yaml
+    creationPolicy: Owner
+    template:
+      type: Opaque
+  data:
+  # The entire config.json: Lunch Flow apiKey/baseUrl, Actual serverUrl/budgetSyncId/password,
+  # and accountMappings. actual-flow reads no other source.
+  - secretKey: config.json
+    remoteRef:
+      key: /k8s/actual-flow/config.json

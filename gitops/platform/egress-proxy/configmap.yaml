@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: squid
+data:
+  squid.conf: |
+    http_port 3128
+    pid_filename none
+    coredump_dir /tmp
+    cache deny all
+    # One line per request to stdout: CONNECT host:443 for HTTPS (no TLS
+    # interception, so paths are only logged for plain HTTP).
+    logformat agent %{%Y-%m-%dT%H:%M:%S}tl %>a %rm %ru %>Hs %<st
+    acl hasRequest has request # skips kubelet's bare TCP probes
+    access_log stdio:/dev/stdout agent hasRequest
+    cache_log stdio:/dev/stderr
+    logfile_rotate 0
+
+    acl SSL_ports port 443
+    acl Safe_ports port 80 443
+    acl CONNECT method CONNECT
+    # No LAN, cluster, link-local or loopback targets: the internet only.
+    acl private dst 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 ::1 fc00::/7 fe80::/10
+    acl agent src 172.30.0.0/16
+
+    http_access deny !Safe_ports
+    http_access deny CONNECT !SSL_ports
+    http_access deny private
+    http_access allow agent
+    http_access deny all

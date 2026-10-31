@@ -1,0 +1,6 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- cronjob.yaml
+# actual-flow-es.yaml is deliberately excluded until /k8s/actual-flow/config.json exists in SSM
+# — see the header comment in that file.

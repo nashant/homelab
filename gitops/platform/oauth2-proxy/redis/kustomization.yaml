@@ -1,0 +1,9 @@
+# Own kustomization: the app-template-defaults component patches every HelmRelease it
+# sees, so it must not reach the oauth2-proxy chart's HelmRelease in the parent.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: oauth2-proxy
+resources:
+- ./helmrelease.yaml
+components:
+- ../../../components/app-template-defaults

@@ -1,0 +1,121 @@
+# Policies for thanos; the default deny is cluster-wide (platform/cilium/default-deny.ccnp.yaml).
+# Peers come from the 2026-10-30 traffic capture plus Grafana's datasources.
+
+# Grafana's default "Prometheus" datasource is Thanos Query.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thanos-query
+  namespace: thanos
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: thanos
+      app.kubernetes.io/component: query
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: grafana
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    # API server service proxy
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 9090}
+  egress:
+  # StoreAPI: the store gateway (blocks in S3) and the sidecar in the Prometheus pod (recent data)
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: thanos
+          app.kubernetes.io/component: storegateway
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - {protocol: TCP, port: 10901}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thanos-storegateway
+  namespace: thanos
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: thanos
+      app.kubernetes.io/component: storegateway
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: thanos
+          app.kubernetes.io/component: query
+    ports:
+    - {protocol: TCP, port: 10901}
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - {protocol: TCP, port: 10902}
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: seaweedfs
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/component: s3
+    ports:
+    - {protocol: TCP, port: 8333}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: thanos-compactor
+  namespace: thanos
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: thanos
+      app.kubernetes.io/component: compactor
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - {protocol: TCP, port: 10902}
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: seaweedfs
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/component: s3
+    ports:
+    - {protocol: TCP, port: 8333}

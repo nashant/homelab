@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: unifi-os-mongodb
+  namespace: unifi
+spec:
+  podSelector:
+    matchLabels:
+      app: unifi-os-database-svc
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: unifi-os-server
+    ports:
+    - port: 27017
+      protocol: TCP
+  egress:
+  # The operator's agent reads its automation config through the API server (node IPs)
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}

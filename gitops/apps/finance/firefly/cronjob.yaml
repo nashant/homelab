@@ -1,0 +1,34 @@
+# Mirrors upstream docker-compose: daily 03:00 GET on Firefly's cron endpoint.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: firefly-cron
+  namespace: finance
+spec:
+  schedule: "0 3 * * *"
+  timeZone: Europe/London
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: firefly-cron
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: cron
+            image: curlimages/curl:latest
+            env:
+            - name: STATIC_CRON_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: firefly
+                  key: cron-token
+            command:
+            - sh
+            - -c
+            - curl -fsS "http://firefly:8080/api/v1/cron/$STATIC_CRON_TOKEN"

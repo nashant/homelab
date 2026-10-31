@@ -1,0 +1,48 @@
+# LAN access for the workstation's MCP clients. The servers carry standing
+# admin credentials and have no auth of their own, so private-traefik admits
+# only the workstation.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: workstation-only
+spec:
+  ipAllowList:
+    sourceRange:
+    - 172.16.0.242/32
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-private
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: mcp-workstation-only@kubernetescrd
+spec:
+  ingressClassName: private-traefik
+  rules:
+  - host: mcp-opnsense.nashes.uk
+    http:
+      paths:
+      - {path: /, pathType: Prefix, backend: {service: {name: opnsense, port: {name: mcp}}}}
+  - host: mcp-ha.nashes.uk
+    http:
+      paths:
+      - {path: /, pathType: Prefix, backend: {service: {name: ha, port: {name: mcp}}}}
+  - host: mcp-ha-dev.nashes.uk
+    http:
+      paths:
+      - {path: /, pathType: Prefix, backend: {service: {name: ha-dev, port: {name: mcp}}}}
+  - host: mcp-grafana.nashes.uk
+    http:
+      paths:
+      - {path: /, pathType: Prefix, backend: {service: {name: grafana, port: {name: mcp}}}}
+  - host: mcp-unifi.nashes.uk
+    http:
+      paths:
+      - {path: /, pathType: Prefix, backend: {service: {name: unifi, port: {name: mcp}}}}
+  tls:
+  - hosts:
+    - mcp-opnsense.nashes.uk
+    - mcp-ha.nashes.uk
+    - mcp-ha-dev.nashes.uk
+    - mcp-grafana.nashes.uk
+    - mcp-unifi.nashes.uk

@@ -1,0 +1,11 @@
+# opencode namespace. PSA restricted: the pod spec must stay non-root, no
+# privileged, no hostPath, caps dropped, seccomp on. gVisor (runsc) provides
+# the kernel boundary on top.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opencode
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted

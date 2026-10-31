@@ -1,0 +1,154 @@
+---
+# Predbat configuration for the battery_sim "Shadow Battery" in prod HA.
+# Mounted read-only at /config/apps.yaml from a ConfigMap (kustomize configMapGenerator);
+# edit here, not in the Predbat web UI. Reference: https://springfall2008.github.io/batpred/apps-yaml/
+pred_bat:
+  module: predbat
+  class: PredBat
+
+  prefix: predbat
+  timezone: Europe/London
+  currency_symbols:
+    - '£'
+    - 'p'
+  threads: auto
+  log_count: 10
+
+  # Standalone container: HA connection. ha_key comes from /secrets/secrets.yaml (ESO-rendered,
+  # selected via PREDBAT_SECRETS_FILE in deployment.yaml).
+  ha_url: 'http://homeassistant.automation.svc.cluster.local:8123'
+  ha_key: !secret ha_key
+
+  # Hypothetical tariffs from the public Octopus API (override metric_octopus_* sensors).
+  # Region H is taken from the live tariff code E-1R-OE-FIX-12M-26-03-03-V2-H.
+  dno_region: 'H'
+  rates_import_octopus_url: 'https://api.octopus.energy/v1/products/GO-FIX-12M-26-10-14/electricity-tariffs/E-1R-GO-FIX-12M-26-10-14-{dno_region}/standard-unit-rates/'
+  rates_export_octopus_url: 'https://api.octopus.energy/v1/products/AGILE-OUTGOING-19-05-13/electricity-tariffs/E-1R-AGILE-OUTGOING-19-05-13-{dno_region}/standard-unit-rates/'
+
+  # Custom inverter type: battery_sim is driven purely via service calls on its Battery Mode select.
+  num_inverters: 1
+  inverter_type: BSIM
+  inverter:
+    name: "battery_sim"
+    has_rest_api: False
+    has_mqtt_api: False
+    has_service_api: True
+    output_charge_control: "none"
+    charge_control_immediate: False
+    current_dp: 1
+    charge_discharge_with_rate: False
+    has_charge_enable_time: False
+    has_discharge_enable_time: False
+    has_target_soc: False
+    target_soc_used_for_discharge: False
+    has_reserve_soc: False
+    has_timed_pause: False
+    time_button_press: False
+    support_charge_freeze: True
+    support_discharge_freeze: True
+    has_ge_inverter_mode: False
+    has_idle_time: False
+    has_time_window: False
+    charge_time_format: "S"
+    charge_time_entity_is_option: False
+    can_span_midnight: False
+    clock_time_format: "%Y-%m-%d %H:%M:%S"
+    num_load_entities: 1
+    soc_units: "%"
+    write_and_poll_sleep: 2
+
+  # Mode mapping per battery_sim update_battery(): "Default mode" only discharges to cover load
+  # (it charges only from export, which is zero here), so it doubles as both stop services.
+  charge_start_service:
+    service: select.select_option
+    entity_id: select.shadow_battery_battery_mode
+    option: "Force charge"
+  charge_stop_service:
+    service: select.select_option
+    entity_id: select.shadow_battery_battery_mode
+    option: "Default mode"
+  charge_freeze_service:
+    service: select.select_option
+    entity_id: select.shadow_battery_battery_mode
+    option: "Pause battery"
+  discharge_start_service:
+    service: select.select_option
+    entity_id: select.shadow_battery_battery_mode
+    option: "Force discharge"
+  discharge_stop_service:
+    service: select.select_option
+    entity_id: select.shadow_battery_battery_mode
+    option: "Default mode"
+  discharge_freeze_service:
+    service: select.select_option
+    entity_id: select.shadow_battery_battery_mode
+    option: "Pause battery"
+
+  # Battery/inverter figures mirror the battery_sim entry, which models the real kit:
+  # 2x Fogstar 16.1 kWh stack (32.2 kWh, 150 A/module) on a Solis S6-EH1P10K-L-PLUS
+  # (10 kW / 210 A battery limit — the binding one). Efficiencies from the Solis datasheet:
+  # AC->battery 93.9%, battery->AC 93.8% (no separate cell loss; Fogstar publishes none).
+  soc_max:
+    - 32.2
+  battery_rate_max:
+    - 10000
+  inverter_limit:
+    - 10000
+  # Grid export cap. Measured Ze 0.23 ohm and a ~247 V supply give ~6.6 kW before the 253 V
+  # statutory ceiling (253*(253-V)/Ze); 5 kW keeps inside it up to ~248.5 V. battery_sim has
+  # only one discharge cap (load + export), so HA automation.shadow_battery_limit_export_to_5_kw
+  # holds number.shadow_battery_discharge_limit at min(10, load + 5) kW while force-discharging
+  # and at 10 kW otherwise; sensor.shadow_battery_export_power is also clamped to 5 kW.
+  inverter_limit_export:
+    - 5000
+  battery_min_soc: 10             # floor for plan targets; matches number.shadow_battery_minimum_soc
+  battery_scaling:
+    - 1.0
+
+  # Battery state from battery_sim
+  soc_kw:
+    - sensor.shadow_battery
+  soc_percent:
+    - sensor.shadow_battery_state_of_charge
+  battery_power:
+    - sensor.shadow_battery_power      # template helper: discharging - charging, kW (+ve = discharge)
+  battery_power_invert:
+    - false
+
+  # House load = the real CT clamp (there is no physical battery, so the meter sees true load).
+  # Import/export = HA integrals of sensor.shadow_battery_grid_import_power / _export_power, not
+  # battery_sim's simulated meters: those only move once their source reports after startup, so a
+  # restart or a silent CT clamp drops whole force-charges (lost ~13.9 kWh on 2026-09-28).
+  load_today:
+    - sensor.power_monitor_main_house_electricity_daily
+  load_power:
+    - sensor.power_monitor_main_power
+  import_today:
+    - sensor.shadow_battery_grid_import_energy
+  export_today:
+    - sensor.shadow_battery_export_energy
+
+  # No solar, no EV
+  num_cars: 0
+
+  # Load forecast: same weekday last week (default) — needs 7+ days of load_today history.
+  days_previous:
+    - 7
+  days_previous_weight:
+    - 1
+  forecast_hours: 48
+
+  # Initial values for Predbat's own HA settings: applied only before first start,
+  # afterwards change them in HA / the Predbat web UI.
+  mode: "Control charge & discharge"
+  set_read_only: False
+  battery_loss: 0.06            # battery_sim charge_efficiency 0.939 (HA input_number step is 0.01)
+  battery_loss_discharge: 0.06  # battery_sim discharge_efficiency 0.938
+  inverter_loss: 0.0            # battery_sim applies no separate inverter loss
+  inverter_hybrid: False
+  expert_mode: True
+  set_reserve_min: 10
+  # Virtual cost per kWh charged AND discharged. Wear from the real pack (~£5000 / 8000 cycles
+  # at 91% DoD) is ~1.1p each way; 5p is a deliberate choice above that to keep cycling and
+  # marginal export down, not a degradation estimate.
+  metric_battery_cycle: 5

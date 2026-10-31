@@ -1,0 +1,27 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: longhorn-backup-minio
+  namespace: longhorn-system
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: minio-backup-credentials   # referenced by the BackupTarget CR
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      # `longhorn` is MinIO's only named user — the key in
+      # /k8s/longhorn/backups-access-key returns InvalidAccessKeyId.
+      # No VIRTUAL_HOSTED_STYLE: a bare-IP endpoint only works path-style.
+      mergePolicy: Merge
+      data:
+        AWS_ACCESS_KEY_ID: "longhorn"
+        AWS_ENDPOINTS: "http://172.16.0.11:9000"
+  data:
+  # this SSM parameter is a bare string, not JSON, so it maps to one key
+  - secretKey: AWS_SECRET_ACCESS_KEY
+    remoteRef:
+      key: /k8s/longhorn/backups-password

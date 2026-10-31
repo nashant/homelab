@@ -1,0 +1,42 @@
+# linuxserver.io images: s6-overlay starts as root and drops to PUID/PGID.
+# List AFTER app-template-defaults: it replaces valuesFrom with both ConfigMaps.
+#   components:
+#   - ../../../components/app-template-defaults
+#   - ../../../components/linuxserver
+# The env lands on controllers.main.containers.app, so use those keys in the app.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+configMapGenerator:
+- name: RELEASE-app-template-linuxserver
+  files:
+  - linuxserver.yaml=values.yaml
+  options:
+    disableNameSuffixHash: true
+    labels:
+      reconcile.fluxcd.io/watch: Enabled
+patches:
+- path: helmrelease.yaml
+  target:
+    group: helm.toolkit.fluxcd.io
+    kind: HelmRelease
+replacements:
+- source:
+    kind: HelmRelease
+    fieldPath: metadata.name
+  targets:
+  - select:
+      kind: ConfigMap
+      name: RELEASE-app-template-linuxserver
+    fieldPaths:
+    - metadata.name
+    options:
+      delimiter: "-"
+      index: 0
+  - select:
+      kind: HelmRelease
+    fieldPaths:
+    - spec.valuesFrom.[valuesKey=defaults.yaml].name
+    - spec.valuesFrom.[valuesKey=linuxserver.yaml].name
+    options:
+      delimiter: "-"
+      index: 0

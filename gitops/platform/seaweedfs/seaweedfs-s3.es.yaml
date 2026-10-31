@@ -1,0 +1,19 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: seaweedfs-s3-secret
+  namespace: seaweedfs
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: seaweedfs-s3-secret       # helm existingConfigSecret
+    creationPolicy: Owner
+  # Blob: the whole JSON config is one opaque value under one key
+  # (seaweedfs_s3_config), matching the chart's existingConfigSecret contract.
+  data:
+  - secretKey: seaweedfs_s3_config
+    remoteRef:
+      key: /k8s/seaweedfs/s3-config

@@ -1,0 +1,42 @@
+# Ingress only from the opencode pod; egress to public internet on 80/443.
+# The CIDR excepts keep the LAN, VPN and cluster out even if squid's own
+# `private` ACL were removed.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: egress-proxy
+  namespace: egress-proxy
+spec:
+  endpointSelector: {}
+  ingress:
+  - fromEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: opencode
+        k8s:app: opencode
+    toPorts:
+    - ports: [{port: "3128", protocol: TCP}]
+  # kubelet probes
+  - fromEntities: [host]
+    toPorts:
+    - ports: [{port: "3128", protocol: TCP}]
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s:k8s-app: kube-dns
+    toPorts:
+    - ports: [{port: "53", protocol: ANY}]
+  - toCIDRSet:
+    - cidr: 0.0.0.0/0
+      except:
+      - 0.0.0.0/8
+      - 10.0.0.0/8
+      - 100.64.0.0/10
+      - 127.0.0.0/8
+      - 169.254.0.0/16
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+    toPorts:
+    - ports:
+      - {port: "80", protocol: TCP}
+      - {port: "443", protocol: TCP}

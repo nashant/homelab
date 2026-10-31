@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: finance
+resources:
+- ./db.cluster.yaml
+# old postgres:16 Deployment, scaled to 0; delete these three (and the PVC) once the CNPG move is accepted
+- ./db.pvc.yaml
+- ./db.deployment.yaml
+- ./db.service.yaml
+- ./helmrelease.yaml
+components:
+- ../../../components/app-template-defaults
+
+# Secret moneymatter-secrets (JWT_SECRET, SESSION_SECRET, AUTH_SECRET; DB_PASSWORD now only for the old
+# DB) has no manifest here on purpose: self-generated internal-only creds created once live via
+# `kubectl create secret generic`. Move to an SSM-backed ExternalSecret if this graduates from trial.

@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: mcp
+        image: grafana/mcp-grafana:2.1.1@sha256:71a3f4e6f412d253611314233df709ec2571fb50e39742d23fa2940f670646dc
+        command: ["/app/mcp-grafana"]
+        # Read-only: no create/update/delete tools.
+        # Host allowlist defaults to loopback; opencode calls the Service name.
+        args: ["--transport", "streamable-http", "--address", "0.0.0.0:8080", "--disable-write",
+               "--allowed-hosts", "grafana.mcp.svc:8080,grafana.mcp.svc.cluster.local:8080,mcp-grafana.nashes.uk",
+               "--usage-stats", "disabled"]
+        ports:
+        - name: mcp
+          containerPort: 8080
+        env:
+        # Direct to the pod port, past Traefik's oauth2 forwardAuth. Grafana
+        # trusts X-Auth-Request-Email from anything that reaches :3000, so keep
+        # GRAFANA_FORWARD_HEADERS and URL override (GRAFANA_ALLOW_URL_OVERRIDE)
+        # unset: callers must not be able to pass headers through.
+        - name: GRAFANA_URL
+          value: http://kube-prometheus-grafana.monitoring.svc.cluster.local
+        - name: GRAFANA_SERVICE_ACCOUNT_TOKEN
+          valueFrom:
+            secretKeyRef: {name: grafana, key: token}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests: {cpu: 20m, memory: 64Mi}
+          limits: {memory: 256Mi}
+        readinessProbe:
+          tcpSocket: {port: 8080}
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket: {port: 8080}
+          periodSeconds: 30
+      volumes:
+      - {name: tmp, emptyDir: {}}

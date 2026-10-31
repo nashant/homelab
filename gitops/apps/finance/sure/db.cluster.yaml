@@ -1,0 +1,37 @@
+# Replaces db.deployment.yaml (kept at 0 replicas for rollback). Owner credentials come from
+# db-es.yaml: same SSM password as before, in the basic-auth shape initdb requires.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: sure-pg
+  namespace: finance
+  labels:
+    part-of: sure
+spec:
+  instances: 1
+  # Same major (16) as the old server. Dated tag = immutable build.
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.15-202610260820-standard-trixie@sha256:1ec419e997a8bde5263b6951f4c5ebc4aa2e1937927001f2561025c0a816e174
+  # One instance: a PDB would block every node drain.
+  enablePDB: false
+  bootstrap:
+    initdb:
+      database: sure_production
+      owner: sure
+      secret:
+        name: sure-pg-owner
+      # Match the old server (en_US.utf8) so text ordering doesn't change.
+      encoding: UTF8
+      localeCollate: en_US.utf8
+      localeCType: en_US.utf8
+  storage:
+    size: 5Gi
+    storageClass: longhorn
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  # TODO(backup): no S3 credentials for CNPG exist yet; needs a bucket + SSM keys + ExternalSecret and
+  # the barman-cloud plugin. Until then the Longhorn volume backup is the only off-pod copy.

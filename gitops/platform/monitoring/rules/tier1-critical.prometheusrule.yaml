@@ -1,0 +1,124 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: tier1-critical
+  namespace: monitoring
+  labels:
+    release: kube-prometheus
+    tier: "1"
+spec:
+  groups:
+  - name: tier1.householdCritical
+    interval: 30s
+    rules:
+    - alert: HomeAssistantDown
+      expr: kube_deployment_status_replicas_available{namespace="automation",deployment="homeassistant"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Home Assistant is down
+        description: No Home Assistant pods Ready for 5m+. Home automation is offline.
+
+    - alert: MQTTDown
+      expr: kube_deployment_status_replicas_available{namespace="automation",deployment="mqtt"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: MQTT broker is down
+        description: |
+          Zigbee2MQTT, ESPHome, and all bus-based integrations are blocked.
+          Expect cascading failures in HA over the next ~5m.
+
+    - alert: UnifiDown
+      expr: kube_deployment_status_replicas_available{namespace="automation",deployment="unifi"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Unifi controller is down
+        description: Network management interface unavailable. DHCP/WiFi may degrade depending on AP firmware.
+
+    - alert: UnifiMongoUnhealthy
+      expr: mongodb_replset_member_health == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Unifi MongoDB replica unhealthy
+        description: Member {{ $labels.name }} reports health=0. Unifi controller will misbehave.
+
+    - alert: CoreDNSDown
+      expr: kube_deployment_status_replicas_available{namespace="kube-system",deployment="coredns"} == 0
+      for: 3m
+      labels:
+        severity: critical
+      annotations:
+        summary: CoreDNS has no Ready pods
+        description: In-cluster DNS resolution is broken.
+
+    - alert: OAuth2ProxyDown
+      expr: kube_deployment_status_replicas_available{namespace="oauth2-proxy"} == 0
+      for: 3m
+      labels:
+        severity: critical
+      annotations:
+        summary: OAuth2-proxy is down
+        description: All public ingresses gated behind ForwardAuth are inaccessible.
+
+    - alert: TraefikPublicDown
+      expr: kube_deployment_status_replicas_available{namespace="traefik",deployment="public"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: Public Traefik has no Ready pods
+        description: External HTTPS/Plex access is down.
+
+    - alert: CiliumAgentUnavailable
+      expr: kube_daemonset_status_number_unavailable{namespace="kube-system",daemonset="cilium"} > 0
+      for: 3m
+      labels:
+        severity: critical
+      annotations:
+        summary: "{{ $value }} Cilium agent(s) unavailable"
+        description: |
+          One or more Cilium agents are not Ready. Pod networking on the
+          affected node is degraded (no CNI, no kube-proxy replacement).
+
+    - alert: NodeNotReady
+      expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Node {{ $labels.node }} is NotReady
+        description: Node has been NotReady for 5m+. Workloads will be rescheduled.
+
+    - alert: WildcardCertExpiringFast
+      expr: (certmanager_certificate_expiration_timestamp_seconds{name=~"wildcard.*"} - time()) / 86400 < 3
+      for: 1h
+      labels:
+        severity: critical
+      annotations:
+        summary: Wildcard cert {{ $labels.name }} expires in <3 days
+        description: Renewal is failing. Every ingress will break when it expires.
+
+    - alert: NodeRootDiskCritical
+      expr: (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) < 0.07
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: Node {{ $labels.instance }} root filesystem <7% free
+        description: etcd, kubelet and containerd will fail imminently. Free space on the root disk NOW.
+
+    - alert: LonghornBulkDiskCritical
+      expr: (node_filesystem_avail_bytes{mountpoint="/mnt/4TB-1"} / node_filesystem_size_bytes{mountpoint="/mnt/4TB-1"}) < 0.05
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Longhorn bulk disk /mnt/4TB-1 <5% free on {{ $labels.instance }}
+        description: ENOSPC imminent. Longhorn rebuilds fail and SeaweedFS cold-tier writes corrupt when this fills (root cause of the 2026-07-08 incident). Free space immediately.

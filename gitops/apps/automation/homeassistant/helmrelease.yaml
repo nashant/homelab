@@ -1,0 +1,116 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: homeassistant
+  namespace: automation
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: apps-critical
+      annotations:
+        fluentbit.io/parser: homeassistant
+        # the chart orders containers by key (alpine first); keep `kubectl logs/exec` on HA
+        kubectl.kubernetes.io/default-container: homeassistant
+      labels:
+        app: homeassistant   # `kubectl -l app=homeassistant` in UPSTREAM-NOTES.md
+      # LAN discovery/mDNS integrations need the node's network
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        # HA and the alpine sidecar run as root. The pre-chart pod had no seccomp
+        # profile (Unconfined).
+        runAsNonRoot: false
+        seccompProfile:
+          type: Unconfined
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            nameOverride: homeassistant
+            image:
+              repository: ghcr.io/home-assistant/home-assistant
+              tag: 2026.10.3@sha256:407b89cd11a8cb67d388d21739a226c74acbbebe1ac59e3b83b11b43ce76b98f
+            env:
+              TZ: Europe/London
+              PYTHONPATH: /config/deps
+            resources:
+              requests:
+                cpu: "1"
+                memory: 2G
+              limits:
+                cpu: "2"
+                memory: 6G
+          # shell with vim/curl on the config volume (mounted at /src/homeassistant)
+          alpine:
+            image:
+              repository: alpine
+              tag: 3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
+            command:
+            - sh
+            - -c
+            - |
+              apk update
+              apk add --no-cache vim curl
+              while [ ! -f /src/kill ]; do
+                sleep 30
+              done
+    service:
+      app:
+        controller: main
+        labels:
+          app: homeassistant   # monitoring/homeassistant ServiceMonitor selects on this
+        ports:
+          http:
+            port: 8123
+    ingress:
+      public:
+        className: public-traefik
+        annotations:
+          external-dns.alpha.kubernetes.io/target: home.nashes.uk
+        hosts:
+        - host: &host homeassistant.nashes.uk
+          paths:
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: app
+              port: http
+        tls:
+        - hosts: [*host]
+      private:
+        className: private-traefik
+        annotations:
+          traefik.ingress.kubernetes.io/router.tls.options: automation-ha-http1-only@kubernetescrd
+        hosts:
+        - host: *host
+          paths:
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: app
+              port: http
+        tls:
+        - hosts: [*host]
+    persistence:
+      config:
+        forceRename: homeassistant-config
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 10Gi
+        advancedMounts:
+          main:
+            app:
+            - path: /config
+            alpine:
+            - path: /src/homeassistant
+      localtime:
+        type: hostPath
+        hostPath: /etc/localtime
+        advancedMounts:
+          main:
+            app:
+            # relative path kept from the pre-chart Deployment
+            - path: localtime
+              readOnly: true

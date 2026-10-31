@@ -1,0 +1,107 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: cilium
+  namespace: kube-system
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: cilium
+      version: 1.19.4
+      sourceRef:
+        kind: HelmRepository
+        name: cilium
+        namespace: flux-system
+      interval: 1m
+  values:
+    autoDirectNodeRoutes: true
+    bgpControlPlane:
+      enabled: true
+      announce:
+        loadbalancerIP: true
+    bpf:
+      lbExternalClusterIP: true
+      masquerade: false
+    cluster:
+      name: home
+    enableIPv4Masquerade: false
+    enableIPv6Masquerade: false
+    endpointRoutes:
+      enabled: false
+    gatewayAPI:
+      enabled: false
+      gatewayClass:
+        create: auto
+    hubble:
+      tls:
+        auto:
+          method: cronJob
+          schedule: "0 0 1 */4 *"
+      relay:
+        enabled: true
+      metrics:
+        enabled:
+        - dns
+        # source/destination per drop, so a policy gap names the missing allow
+        - "drop:sourceContext=workload-name|reserved-identity;destinationContext=workload-name|reserved-identity;labelsContext=source_namespace,destination_namespace,traffic_direction"
+        - tcp
+        - flow
+        - icmp
+        - "http:exemplars=true;labelsContext=source_ip,source_namespace,source_workload,destination_ip,destination_namespace,destination_workload,traffic_direction"
+        serviceMonitor:
+          enabled: true
+      ui:
+        enabled: true
+        ingress:
+          enabled: true
+          className: private-traefik
+          annotations:
+            cert-manager.io/cluster-issuer: letsencrypt-prod
+          hosts: [hubble.23oak.uk, hubble.nashes.uk]
+          tls:
+          - hosts: [hubble.23oak.uk, hubble.nashes.uk]
+            secretName: hubble-private-tls
+        frontend:
+          server:
+            ipv6:
+              enabled: false
+    ingressController:
+      enabled: true
+      loadbalancerMode: shared
+    ipam:
+      mode: multi-pool
+      operator:
+        clusterPoolIPv4PodCIDRList: []
+        autoCreateCiliumPodIPPools:
+          default:
+            ipv4:
+              cidrs:
+              - 172.30.0.0/21
+              maskSize: 24
+          vpn:
+            ipv4:
+              cidrs:
+              - 172.30.8.0/21
+              maskSize: 27
+    #ipv4NativeRoutingCIDR: 172.30.0.0/16
+    k8sServiceHost: 172.16.0.9
+    k8sServicePort: 6443
+    kubeProxyReplacement: true
+    # Lets NetworkPolicy ipBlock select node IPs: hostNetwork pods (homeassistant), the
+    # API server, and LAN traffic forwarded between nodes (remote-node) all need it.
+    policyCIDRMatchMode: [nodes]
+    l7Proxy: true
+    operator:
+      replicas: 1
+      prometheus:
+        enabled: true
+        serviceMonitor:
+          enabled: true
+    prometheus:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+    routingMode: native
+    synchronizeK8sNodes: false
+    tunnelProtocol: vxlan

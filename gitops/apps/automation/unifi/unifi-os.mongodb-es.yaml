@@ -1,0 +1,19 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: unifi-os-mongodb-user
+  namespace: unifi
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: unifi-os-mongodb-user     # must match deployment.yaml secretKeyRef.name
+    creationPolicy: Owner
+    template:
+      type: Opaque
+  data:
+  - secretKey: password             # must match deployment.yaml secretKeyRef.key
+    remoteRef:
+      key: /k8s/unifi-os/mongodb-password

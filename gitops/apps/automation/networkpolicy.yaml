@@ -1,0 +1,30 @@
+# Policies for automation; the default deny is cluster-wide
+# (platform/cilium/default-deny.ccnp.yaml). Peers come from the 2026-10-28 and 2026-10-30 traffic
+# captures. The app-template releases carry their own policies in their HelmRelease values; this
+# file covers the namespace defaults and the database. homeassistant, esphome and ep-configurator
+# are hostNetwork, so no NetworkPolicy applies to them; HA reaches the pods from the node IPs.
+
+# HA's recorder (hostNetwork, so the node IPs) and the operator. No egress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: homeassistant-db
+  namespace: automation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: homeassistant-db
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: mariadb-operator
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: mariadb-operator
+    ports:
+    - {protocol: TCP, port: 3306}

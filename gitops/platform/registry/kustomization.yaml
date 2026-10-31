@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: registry
+resources:
+  - namespace.yaml
+  - registry-s3.es.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - servicemonitor.yaml
+  - networkpolicy.yaml
+# Out-of-band prerequisites (secret-bearing, not in git):
+#   1. a bucket-scoped `registry` identity in the SeaweedFS S3 config
+#      (SSM /k8s/seaweedfs/s3-config; the gateway needs a restart/SIGHUP to pick it up)
+#   2. SSM /k8s/registry/s3 = {REGISTRY_STORAGE_S3_ACCESSKEY, REGISTRY_STORAGE_S3_SECRETKEY}
+#   3. the `registry` bucket: `echo 's3.bucket.create -name registry' | weed shell`
+#      (Distribution's S3 driver does not create it)

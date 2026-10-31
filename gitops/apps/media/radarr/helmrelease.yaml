@@ -1,0 +1,160 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: radarr
+  namespace: media
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: apps-high
+      # raw Deployment had enableServiceLinks true (k8s default)
+      enableServiceLinks: true
+      annotations:
+        fluentbit.io/parser: radarr
+        # egress via the VPN pool
+        ipam.cilium.io/ip-pool: vpn
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "1"
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            image:
+              repository: ghcr.io/linuxserver/radarr
+              tag: nightly-7.0.0.10788-ls28@sha256:13e05f8e2f6e241d498ad4d1c68595a71a7c08a73fe1c1624452585280009dfb
+            ports:
+            - name: radarr-port
+              containerPort: 7878
+            resources:
+              requests:
+                cpu: 400m
+                memory: 300M
+              limits:
+                cpu: "1"
+                memory: 600M
+          converter:
+            image:
+              repository: docker.io/nashant/sonarr-converter
+              tag: latest@sha256:37be4e9ccf9bd92ace21c087c6c12b59a92934166f695c2d51bb1959a4c85318
+            env:
+              PYTHONUNBUFFERED: "1"
+            ports:
+            - name: converter-http
+              containerPort: 8080
+            probes:
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health
+                    port: 8080
+                  initialDelaySeconds: 20
+                  periodSeconds: 10
+            resources:
+              requests:
+                cpu: 100m
+                memory: 100M
+              limits:
+                cpu: 200m
+                memory: 200M
+    service:
+      app:
+        controller: main
+        ports:
+          http:
+            port: 7878
+    ingress:
+      public:
+        className: public-traefik
+        annotations:
+          traefik.ingress.kubernetes.io/router.middlewares: oauth2-proxy-oauth2-proxy@kubernetescrd
+          external-dns.alpha.kubernetes.io/target: home.nashes.uk
+        hosts:
+        - host: &nashes radarr.nashes.uk
+          paths: &paths
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: app
+              port: http
+        tls:
+        - hosts: [*nashes]
+      private:
+        className: private-traefik
+        hosts:
+        - host: &oak radarr.23oak.uk
+          paths: *paths
+        - host: *nashes
+          paths: *paths
+        tls:
+        - hosts: [*oak, *nashes]
+    persistence:
+      config:
+        forceRename: radarr-config
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 5Gi
+        # converter sidecar only mounts storage
+        advancedMounts:
+          main:
+            app:
+            - path: /config
+      storage:
+        type: nfs
+        server: 172.16.0.10
+        path: /mnt/storage
+        globalMounts:
+        - path: /mnt/storage
+    networkpolicies:
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: traefik
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: traefik
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: bazarr
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: requestrr
+            ports:
+            - {protocol: TCP, port: 7878}
+          egress:
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: jackett
+            ports:
+            - {protocol: TCP, port: 9117}
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: qbittorrent
+            ports:
+            - {protocol: TCP, port: 8080}
+          # Plex library refresh after an import
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: plex-media-server
+            ports:
+            - {protocol: TCP, port: 32400}
+          - to:
+            - ipBlock:
+                cidr: 0.0.0.0/0
+                except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+            ports:
+            - {protocol: TCP, port: 443}
+            - {protocol: TCP, port: 80}

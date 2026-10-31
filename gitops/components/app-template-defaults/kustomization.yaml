@@ -1,0 +1,45 @@
+# Baseline for every bjw-s app-template HelmRelease. One HelmRelease per including
+# kustomization (the app dir); set `namespace:` there so the ConfigMap lands beside it.
+#   components:
+#   - ../../../components/app-template-defaults
+# - HelmRelease spec fields (chartRef, interval, remediation, drift) are patched in
+#   and override the app's HelmRelease.
+# - Chart values come from ConfigMap <release>-app-template-defaults via valuesFrom,
+#   so the app's inline spec.values always win over them.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+configMapGenerator:
+- name: RELEASE-app-template-defaults
+  files:
+  - defaults.yaml=values.yaml
+  options:
+    disableNameSuffixHash: true
+    labels:
+      reconcile.fluxcd.io/watch: Enabled
+patches:
+- path: helmrelease.yaml
+  target:
+    group: helm.toolkit.fluxcd.io
+    kind: HelmRelease
+# Give the ConfigMap (and the valuesFrom entry pointing at it) the release's name, so
+# apps sharing a namespace or a parent kustomization don't collide.
+replacements:
+- source:
+    kind: HelmRelease
+    fieldPath: metadata.name
+  targets:
+  - select:
+      kind: ConfigMap
+      name: RELEASE-app-template-defaults
+    fieldPaths:
+    - metadata.name
+    options:
+      delimiter: "-"
+      index: 0
+  - select:
+      kind: HelmRelease
+    fieldPaths:
+    - spec.valuesFrom.[valuesKey=defaults.yaml].name
+    options:
+      delimiter: "-"
+      index: 0

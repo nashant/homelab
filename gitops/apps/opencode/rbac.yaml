@@ -1,0 +1,222 @@
+# Read-only cluster-wide (no Secrets); write only via the opencode:edit
+# RoleBindings at the bottom. admission-policy.yaml guards those writes.
+# Why it isn't cluster-wide admin, and the residual risks: README.md "RBAC".
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opencode
+  namespace: opencode
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opencode:view
+rules:
+# Core group, read-only, explicitly WITHOUT secrets and without the
+# exec/attach/portforward/proxy subresources
+- apiGroups: [""]
+  resources:
+  - pods
+  - pods/log
+  - services
+  - endpoints
+  - configmaps
+  - events
+  - namespaces
+  - replicationcontrollers
+  - podtemplates
+  - persistentvolumeclaims
+  - resourcequotas
+  - limitranges
+  - serviceaccounts
+  - nodes
+  - persistentvolumes
+  - componentstatuses
+  verbs: [get, list, watch]
+# Everything else the agent should be able to observe
+- apiGroups:
+  - apps
+  - batch
+  - networking.k8s.io
+  - policy
+  - autoscaling
+  - storage.k8s.io
+  - snapshot.storage.k8s.io
+  - discovery.k8s.io
+  - coordination.k8s.io
+  - events.k8s.io
+  - node.k8s.io
+  - scheduling.k8s.io
+  - certificates.k8s.io
+  - cert-manager.io
+  - acme.cert-manager.io
+  - cilium.io
+  - k8s.cni.cncf.io
+  - longhorn.io
+  - external-secrets.io
+  - helm.toolkit.fluxcd.io
+  - kustomize.toolkit.fluxcd.io
+  - source.toolkit.fluxcd.io
+  - notification.toolkit.fluxcd.io
+  - image.toolkit.fluxcd.io
+  - crossplane.io
+  - apiextensions.crossplane.io
+  - pkg.crossplane.io
+  - mariadb.mmontes.io
+  - gateway.networking.k8s.io
+  - traefik.io
+  - monitoring.coreos.com
+  - rbac.authorization.k8s.io
+  - admissionregistration.k8s.io
+  - apiextensions.k8s.io
+  - apiregistration.k8s.io
+  - upgrades.cattle.io
+  resources: ["*"]
+  verbs: [get, list, watch]
+# Self-subject access checks only (`kubectl auth can-i`)
+- apiGroups: [authorization.k8s.io]
+  resources: [selfsubjectaccessreviews, selfsubjectrulesreviews]
+  verbs: [create]
+# Metrics
+- apiGroups: [metrics.k8s.io]
+  resources: [pods, nodes]
+  verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opencode:view
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opencode:view
+subjects:
+- kind: ServiceAccount
+  name: opencode
+  namespace: opencode
+---
+# Bound per namespace by the RoleBindings below, never cluster-wide.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opencode:edit
+rules:
+- apiGroups: [""]
+  resources:
+  - pods
+  - pods/attach
+  - pods/exec
+  - pods/log
+  - pods/portforward
+  - pods/proxy
+  - pods/ephemeralcontainers
+  - services
+  - services/proxy
+  - endpoints
+  - configmaps
+  - events
+  - replicationcontrollers
+  - podtemplates
+  - persistentvolumeclaims
+  - serviceaccounts
+  verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+- apiGroups:
+  - apps
+  - batch
+  - autoscaling
+  - policy
+  - discovery.k8s.io
+  - coordination.k8s.io
+  - events.k8s.io
+  - snapshot.storage.k8s.io
+  - cert-manager.io
+  resources: ["*"]
+  verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+# Ingresses only: NetworkPolicies stay read-only (see header)
+- apiGroups: [networking.k8s.io]
+  resources: [ingresses]
+  verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opencode:edit
+  namespace: opencode
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opencode:edit
+subjects:
+- kind: ServiceAccount
+  name: opencode
+  namespace: opencode
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opencode:edit
+  namespace: automation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opencode:edit
+subjects:
+- kind: ServiceAccount
+  name: opencode
+  namespace: opencode
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opencode:edit
+  namespace: media
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opencode:edit
+subjects:
+- kind: ServiceAccount
+  name: opencode
+  namespace: opencode
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opencode:edit
+  namespace: dev
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opencode:edit
+subjects:
+- kind: ServiceAccount
+  name: opencode
+  namespace: opencode
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opencode:edit
+  namespace: finance
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opencode:edit
+subjects:
+- kind: ServiceAccount
+  name: opencode
+  namespace: opencode
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opencode:edit
+  namespace: ai
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opencode:edit
+subjects:
+- kind: ServiceAccount
+  name: opencode
+  namespace: opencode

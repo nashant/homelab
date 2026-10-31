@@ -1,0 +1,22 @@
+# Egress: DNS and homeassistant-dev (an ordinary pod, unlike prod).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ha-dev
+spec:
+  endpointSelector:
+    matchLabels:
+      app: ha-dev
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s:k8s-app: kube-dns
+    toPorts:
+    - ports: [{port: "53", protocol: ANY}]
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: automation
+        k8s:app: homeassistant-dev
+    toPorts:
+    - ports: [{port: "8123", protocol: TCP}]

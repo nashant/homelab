@@ -1,0 +1,114 @@
+# Actual Budget sync server (https://github.com/actualbudget/actual, packages/sync-server).
+# Single process, SQLite in the PVC at /data — no database service, unlike firefly (MariaDB)
+# and moneymatter/sure (CNPG Postgres + Redis). Server password is set in the UI on first visit
+# and stored in /data/server-files/account.sqlite, so there is no Secret/ExternalSecret either.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: actualbudget
+  namespace: finance
+spec:
+  values:
+    defaultPodOptions:
+      securityContext:
+        # The image creates user `actual` (uid/gid 1001) and chowns /data to it, but has no
+        # USER directive, so it runs as root. fsGroup keeps the volume writeable if upstream
+        # ever adds one.
+        runAsNonRoot: false
+        fsGroup: 1001
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            image:
+              repository: docker.io/actualbudget/actual-server
+              tag: 26.9.0@sha256:552beab3dec8c93d46b8b9245612d63c3f123b8a45063a474f53e229b17621d3
+            env:
+              # ACTUAL_HOSTNAME defaults to "::" (src/load-config.js), which cannot bind here:
+              # pods are IPv4-only and have no net/ipv6 sysctls at all. Same class of fix as
+              # firefly's NGINX_LISTEN_IP_PROTOCOL=ipv4.
+              ACTUAL_HOSTNAME: 0.0.0.0
+              # Default allows password+header+openid. Header auth is already inert
+              # (trustedAuthProxies defaults to []), but pin the list so an upstream default
+              # change can't open a second door on a LAN-reachable app. Only password login is
+              # configured.
+              ACTUAL_ALLOWED_LOGIN_METHODS: password
+              TZ: Europe/London
+              # Upload/sync size caps stay at upstream defaults (20/50/20 MB). If a large budget
+              # file ever fails to sync, the knobs are ACTUAL_UPLOAD_FILE_SYNC_SIZE_LIMIT_MB,
+              # ACTUAL_UPLOAD_SYNC_ENCRYPTED_FILE_SYNC_SIZE_LIMIT_MB, ACTUAL_UPLOAD_FILE_SIZE_LIMIT_MB.
+            probes:
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health
+                    port: 5006
+                  periodSeconds: 5
+                  failureThreshold: 24
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health
+                    port: 5006
+                  periodSeconds: 10
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                cpu: "1"
+                memory: 1Gi
+    service:
+      app:
+        controller: main
+        ports:
+          http:
+            port: 5006
+    ingress:
+      app:
+        className: private-traefik
+        hosts:
+        - host: &host actualbudget.nashes.uk
+          paths:
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: app
+              port: http
+        tls:
+        - hosts: [*host]
+    persistence:
+      data:
+        # The live longhorn StorageClass has no recurringJobSelector, so a new volume only joins
+        # the default recurring-job group. Off-node backup needs the Volume labelled by hand:
+        #   kubectl -n longhorn-system label volumes.longhorn.io <pv-name> recurring-job-group.longhorn.io/nightly=enabled
+        forceRename: actualbudget
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 5Gi
+        globalMounts:
+        - path: /data
+    networkpolicies:
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: traefik
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: private-traefik
+            - podSelector:
+                matchLabels:
+                  app: actual-flow
+            ports:
+            - {protocol: TCP, port: 5006}

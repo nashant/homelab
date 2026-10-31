@@ -1,0 +1,28 @@
+csi:
+  kubeletRootDir: /var/lib/kubelet
+  attacherReplicaCount: 1
+  provisionerReplicaCount: 1
+  resizerReplicaCount: 1
+  snapshotterReplicaCount: 1
+ingress:
+  enabled: true
+  ingressClassName: private-traefik
+  host: longhorn.23oak.uk
+  tls: true
+  tlsSecret: longhorn-tls
+persistence:
+  defaultClass: true
+  defaultFsType: ext4
+  defaultClassReplicaCount: 2
+  reclaimPolicy: Delete
+  recurringJobSelector:
+    enable: true
+    jobList: '[{"name":"nightly","isGroup":true}]'
+defaultBackupStore:
+  # `tilehurst` is MinIO's configured region; see helmrelease.yaml
+  backupTarget: s3://longhorn@tilehurst/
+  backupTargetCredentialSecret: minio-backup-credentials
+  pollInterval: 300
+defaultSettings:
+  priorityClass: system-cluster-critical
+  defaultDataPath: /mnt/ssd/longhorn

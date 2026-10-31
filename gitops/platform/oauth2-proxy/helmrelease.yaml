@@ -1,0 +1,111 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: oauth2-proxy
+  namespace: oauth2-proxy
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: oauth2-proxy
+      version: 10.6.0
+      sourceRef:
+        kind: HelmRepository
+        name: oauth2-proxy
+        namespace: flux-system
+      interval: 1m
+  values:
+    priorityClassName: platform-high
+    nodeSelector:
+      beta.kubernetes.io/arch: amd64
+    proxyVarsAsSecrets: true
+    # Cookie sessions carried every Cognito token on every request; Redis keeps the cookie a short ticket.
+    sessionStorage:
+      type: redis
+      redis:
+        clientType: standalone
+        standalone:
+          connectionUrl: redis://oauth2-proxy-redis.oauth2-proxy.svc.cluster.local:6379
+    extraArgs:
+    - --skip-provider-button=true
+    - --silence-ping-logging=true
+    - --reverse-proxy=true
+    config:
+      existingSecret: cognito-oauth-credentials
+      configFile: |-
+        provider              = "oidc"
+        oidc_issuer_url       = "https://cognito-idp.eu-west-2.amazonaws.com/eu-west-2_5MgwH3gKs"
+        redirect_url          = "https://oauth2.nashes.uk/oauth2/callback"
+
+        pass_access_token         = false
+        pass_authorization_header = false
+        pass_user_headers         = true
+        set_authorization_header  = false
+        set_xauthrequest          = true
+
+        upstreams         = ["static://200"]
+        whitelist_domains = [".nashes.uk"]
+
+        cookie_domains       = [".nashes.uk"]
+        cookie_expire        = "24h"
+        cookie_secure        = true
+        cookie_samesite      = "lax"
+        cookie_csrf_per_request = false
+        cookie_csrf_expire   = "15m"
+    # The allowed emails are personal data, so they live in SSM, not in git
+    # (authenticated-emails-es.yaml); key restricted_user_access, one email per line.
+    authenticatedEmailsFile:
+      enabled: true
+      persistence: secret
+      template: oauth2-proxy-authenticated-emails
+    ingress:
+      enabled: true
+      className: public-traefik
+      path: /oauth2
+      hosts:
+      - oauth2.nashes.uk
+      tls:
+      - hosts:
+        - oauth2.nashes.uk
+      annotations:
+        external-dns.alpha.kubernetes.io/target: home.nashes.uk
+    extraObjects:
+    - apiVersion: traefik.io/v1alpha1
+      kind: Middleware
+      metadata:
+        name: forwardauth
+        namespace: oauth2-proxy
+      spec:
+        forwardAuth:
+          address: http://oauth2-proxy.oauth2-proxy.svc.cluster.local/
+          authResponseHeaders:
+          - X-Auth-Request-User
+          - X-Auth-Request-Email
+          trustForwardHeader: true
+    networkPolicy:
+      create: true
+      ingress:
+      - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+        ports:
+        - {protocol: TCP, port: 4180}
+      # Cognito
+      egress:
+      - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+        ports:
+        - {protocol: TCP, port: 443}
+      # session store
+      - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: oauth2-proxy-redis
+        ports:
+        - {protocol: TCP, port: 6379}

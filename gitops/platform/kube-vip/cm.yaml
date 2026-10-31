@@ -1,0 +1,8 @@
+apiVersion: v1
+data:
+  cidr-global: 172.16.1.0/24
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: kubevip
+  namespace: kube-system

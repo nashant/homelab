@@ -1,0 +1,137 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: tier2-degraded
+  namespace: monitoring
+  labels:
+    release: kube-prometheus
+    tier: "2"
+spec:
+  groups:
+  - name: tier2.degraded
+    interval: 1m
+    rules:
+    - alert: CertExpiringSoon
+      expr: (certmanager_certificate_expiration_timestamp_seconds - time()) / 86400 < 14
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: Certificate {{ $labels.name }} expires in <14d
+        description: Days remaining ≈ {{ $value | humanize }}. Check cert-manager.
+
+    - alert: CertRenewalStuck
+      expr: certmanager_certificate_ready_status{condition="Ready"} == 0
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: Certificate {{ $labels.name }} Ready=False for 1h
+        description: Renewal/issuance not progressing. Check Certificate events and dns01 solver.
+
+    # robustness is one 0/1 series per state, NOT a numeric enum
+    - alert: LonghornVolumeDegraded
+      expr: longhorn_volume_robustness{state="degraded"} == 1
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: Longhorn volume {{ $labels.volume }} is degraded
+        description: Replica count is below desired. Check for disk scheduling failures.
+
+    # longhorn_backup_state is a numeric enum with no `state` label:
+    # 0=New 1=Pending 2=InProgress 3=Completed 4=Error 5=Unknown
+    - alert: LonghornBackupFailed
+      expr: longhorn_backup_state == 4
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: Longhorn backup error for {{ $labels.volume }}
+        description: Backup {{ $labels.backup }} (job {{ $labels.recurring_job }}) is in Error state.
+
+    - alert: LonghornBackupStale
+      expr: longhorn_volume_last_backup_at > 0 and (time() - longhorn_volume_last_backup_at) > 129600
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: Longhorn volume {{ $labels.volume }} has no backup in 36h
+        description: Was being backed up and stopped. nightly-backup runs 01:00 daily.
+
+    # catches the whole backup path being dead, which per-volume staleness cannot
+    # do for volumes that never had a first successful backup
+    - alert: LonghornNoRecentBackups
+      expr: count(longhorn_volume_last_backup_at > (time() - 129600)) == 0
+      for: 1h
+      labels:
+        severity: critical
+      annotations:
+        summary: No Longhorn volume has been backed up anywhere in 36h
+        description: Backup target or nightly-backup job is broken. Check the BackupTarget CR is Available.
+
+    - alert: FluxReconciliationFailing
+      expr: max(gotk_reconcile_condition{type="Ready",status="False"}) by (kind,name,exported_namespace) == 1
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: Flux {{ $labels.kind }} {{ $labels.exported_namespace }}/{{ $labels.name }} not Ready
+        description: GitOps reconciliation has been failing for 30m+. Manifests in-cluster may be drifting from main.
+
+    - alert: NodeMemoryPressure
+      expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.10
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: Node {{ $labels.instance }} <10% memory available
+        description: Sustained memory pressure can trigger OOM kills.
+
+    - alert: PVCNearFull
+      expr: (kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes) < 0.10
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} <10% free
+        description: Resize the PVC or free space.
+
+    # PVCNearFull only sees thin-provisioned PVCs; it cannot see the underlying
+    # physical disk filling. These two watch the host filesystems whose exhaustion
+    # takes the cluster down (the 2026-07-08 bulk-disk incident was invisible here).
+    - alert: NodeRootDiskNearFull
+      expr: (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) < 0.15
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: Node {{ $labels.instance }} root filesystem <15% free
+        description: Root fs backs etcd, containerd, kubelet and Longhorn's ssd disk. Free space before it starves them.
+
+    - alert: LonghornBulkDiskNearFull
+      expr: (node_filesystem_avail_bytes{mountpoint="/mnt/4TB-1"} / node_filesystem_size_bytes{mountpoint="/mnt/4TB-1"}) < 0.15
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: Longhorn bulk disk /mnt/4TB-1 <15% free on {{ $labels.instance }}
+        description: Shared by the Longhorn longhorn-bulk class, the SeaweedFS cold tier and Frigate recordings. Filling it triggers Longhorn DiskPressure and can corrupt in-flight writes.
+
+    - alert: ExternalSecretsSyncFailing
+      expr: external_secret_status_condition{condition="Ready",status="False"} == 1
+      for: 30m
+      labels:
+        severity: warning
+      annotations:
+        summary: ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} sync failing
+        description: Downstream Secret will go stale and break consumers.
+
+    - alert: HighTraefik5xxRate
+      expr: sum(rate(traefik_service_requests_total{code=~"5.."}[5m])) by (service) > 0.5
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: Traefik service {{ $labels.service }} 5xx rate >0.5/s
+        description: Sustained 5xx errors over 10m — check upstream service.

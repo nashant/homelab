@@ -1,0 +1,95 @@
+# Coral Edge TPU temperature from the apex driver's sysfs. Frigate keeps this
+# internally but doesn't export it, and can't see a Coral it isn't using. A
+# wedged TPU reads garbage (e.g. -89.7 C) while status still says ALIVE.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: coral-apex-exporter
+  namespace: monitoring
+  labels:
+    app: coral-apex-exporter
+spec:
+  selector:
+    matchLabels:
+      app: coral-apex-exporter
+  template:
+    metadata:
+      labels:
+        app: coral-apex-exporter
+    spec:
+      priorityClassName: platform-high
+      nodeSelector:
+        feature.node.kubernetes.io/coral-tpu: "true"
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+      containers:
+      - name: exporter
+        image: busybox:1.37
+        command:
+        - sh
+        - -c
+        - |
+          while true; do
+            {
+              echo "# TYPE coral_apex_temperature_celsius gauge"
+              echo "# TYPE coral_apex_reset_count gauge"
+              echo "# TYPE coral_apex_trip_point_celsius gauge"
+              echo "# TYPE coral_apex_shutdown_temperature_celsius gauge"
+              for d in /sys/class/apex/apex_*; do
+                [ -e "$d/temp" ] || continue
+                l="device=\"$(basename "$d")\",pci=\"$(basename "$(readlink -f "$d/device")")\""
+                awk -v l="$l" '{printf "coral_apex_temperature_celsius{%s} %.2f\n", l, $1/1000}' "$d/temp"
+                echo "coral_apex_reset_count{$l} $(cat "$d/reset_count")"
+                for t in 0 1 2; do
+                  awk -v l="$l" -v t="$t" '{printf "coral_apex_trip_point_celsius{%s,trip=\"%s\"} %.2f\n", l, t, $1/1000}' "$d/trip_point${t}_temp"
+                done
+                awk -v l="$l" '{printf "coral_apex_shutdown_temperature_celsius{%s} %.2f\n", l, $1/1000}' "$d/hw_temp_warn2"
+              done
+            } > /www/metrics.tmp && mv /www/metrics.tmp /www/metrics
+            sleep 15
+          done &
+          exec httpd -f -p 9101 -h /www
+        ports:
+        - containerPort: 9101
+          name: metrics
+        resources:
+          requests:
+            cpu: 5m
+            memory: 8Mi
+          limits:
+            memory: 32Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: www
+          mountPath: /www
+      volumes:
+      - name: www
+        emptyDir:
+          medium: Memory
+          sizeLimit: 1Mi
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: coral-apex-exporter
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: coral-apex-exporter
+  # busybox httpd serves the file as application/octet-stream
+  fallbackScrapeProtocol: PrometheusText0.0.4
+  podMetricsEndpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_node_name]
+      targetLabel: node

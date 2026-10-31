@@ -1,0 +1,15 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn-scratch
+provisioner: driver.longhorn.io
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+# WaitForFirstConsumer so the single strict-local replica lands on the node
+# the scheduler places the pod on
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  numberOfReplicas: "1"
+  diskSelector: "ssd"
+  staleReplicaTimeout: "30"
+  dataLocality: "strict-local"

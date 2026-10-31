@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: moneymatter-db
+  namespace: finance
+  labels:
+    app: moneymatter-db
+    part-of: moneymatter
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: postgres
+  selector:
+    app: moneymatter-db

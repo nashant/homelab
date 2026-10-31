@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb
+  namespace: automation
+  labels:
+    app: mariadb
+# Kept (name + ClusterIP) so HA's db_url needs no change; now fronts the operator's
+# homeassistant-db pod instead of the old Deployment.
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3306
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: mariadb
+    app.kubernetes.io/instance: homeassistant-db

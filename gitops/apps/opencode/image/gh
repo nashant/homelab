@@ -1,0 +1,23 @@
+#!/bin/sh
+# gh with a per-repo octo-sts token (no stored GitHub credential in the pod).
+# Repo comes from -R/--repo, else the checkout's origin, else the owner-wide
+# read-only token. An explicit GH_TOKEN wins. Real binary: /usr/bin/gh.
+if [ -z "${GH_TOKEN:-}" ]; then
+  repo=
+  prev=
+  for a in "$@"; do
+    case $prev in -R|--repo) repo=$a ;; esac
+    case $a in --repo=*) repo=${a#--repo=} ;; esac
+    prev=$a
+  done
+  if [ -z "$repo" ]; then
+    url=$(git remote get-url origin 2>/dev/null) || url=
+    repo=$(printf '%s\n' "$url" | sed -E -n 's#^(https://github\.com/|git@github\.com:)([^/]+/[^/]+)$#\2#p' | sed 's/\.git$//')
+  fi
+  # No repo (gh repo list, gh search, ...): owner-wide read-only token.
+  [ -n "$repo" ] || repo=${GH_DEFAULT_OWNER:-nashant}
+  if tok=$("$HOME/bin/github-token" "$repo" 2>/dev/null) && [ -n "$tok" ]; then
+    export GH_TOKEN="$tok"
+  fi
+fi
+exec /usr/bin/gh "$@"

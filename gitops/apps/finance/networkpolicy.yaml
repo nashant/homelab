@@ -1,0 +1,223 @@
+# Policies for finance; the default deny is cluster-wide (platform/cilium/default-deny.ccnp.yaml).
+# Peers come from the 2026-10-28 traffic capture plus the app manifests (the capture saw no
+# importer, cron or actual-flow runs and no internet egress). The app-template releases
+# (actualbudget, moneymatter, sure) carry their own policies in their HelmRelease values; this file
+# covers the workloads without a chart that can.
+
+# Lunch Flow -> Actual. Its Actual server URL is in config.json, so both the Service and the
+# private ingress are allowed; npx pulls the package from npm on every run.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: actual-flow
+  namespace: finance
+spec:
+  podSelector:
+    matchLabels:
+      app: actual-flow
+  policyTypes: [Ingress, Egress]
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: actualbudget
+    ports:
+    - {protocol: TCP, port: 5006}
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/instance: private-traefik
+    ports:
+    - {protocol: TCP, port: 8443}
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    ports:
+    - {protocol: TCP, port: 443}
+---
+# HA (hostNetwork) reaches Firefly on the node IPs; cron, importer and tools/ jobs call http://firefly:8080.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: firefly
+  namespace: finance
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: firefly-iii
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/instance: private-traefik
+    - podSelector: {}
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 8080}
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/instance: firefly-db
+    ports:
+    - {protocol: TCP, port: 3306}
+  # exchange rates
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    ports:
+    - {protocol: TCP, port: 443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: firefly-cron
+  namespace: finance
+spec:
+  podSelector:
+    matchLabels:
+      app: firefly-cron
+  policyTypes: [Ingress, Egress]
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: firefly-iii
+    ports:
+    - {protocol: TCP, port: 8080}
+---
+# Bank providers over 443
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: firefly-importer
+  namespace: finance
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: firefly-importer
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/instance: private-traefik
+    ports:
+    - {protocol: TCP, port: 8080}
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: firefly-iii
+    ports:
+    - {protocol: TCP, port: 8080}
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    ports:
+    - {protocol: TCP, port: 443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: firefly-upload-helper
+  namespace: finance
+spec:
+  podSelector:
+    matchLabels:
+      app: firefly-upload-helper
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/instance: private-traefik
+    ports:
+    - {protocol: TCP, port: 8081}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: firefly-db
+  namespace: finance
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: firefly-db
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: firefly-iii
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: mariadb-operator
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: mariadb-operator
+    ports:
+    - {protocol: TCP, port: 3306}
+---
+# Both CNPG clusters: the app on 5432, the operator on the instance manager (8000) and 5432.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cnpg-instances
+  namespace: finance
+spec:
+  podSelector:
+    matchExpressions:
+    - {key: cnpg.io/cluster, operator: In, values: [moneymatter-pg, sure-pg]}
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/instance: moneymatter
+          app.kubernetes.io/controller: backend
+    ports:
+    - {protocol: TCP, port: 5432}
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/instance: sure
+          app.kubernetes.io/controller: main
+    ports:
+    - {protocol: TCP, port: 5432}
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: cnpg-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: cloudnative-pg
+    ports:
+    - {protocol: TCP, port: 8000}
+    - {protocol: TCP, port: 5432}
+  egress:
+  # API server: pods reach it on the node IPs (needs policyCIDRMatchMode nodes)
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}

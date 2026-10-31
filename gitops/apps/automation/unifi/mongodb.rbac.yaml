@@ -1,0 +1,30 @@
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: mongodb-database
+  namespace: unifi
+# Least-privilege: matches upstream mongodb-kubernetes-operator config/rbac/role_database.yaml.
+# The database pod's SA only needs to read its auth secrets and patch/delete its own pod;
+# services/configmaps/endpoints/PVCs are managed by the *operator* role, not this one.
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["patch","delete","get"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: mongodb-database
+  namespace: unifi
+subjects:
+  - kind: ServiceAccount
+    name: mongodb-database
+    namespace: unifi
+roleRef:
+  kind: Role
+  name: mongodb-database
+  apiGroup: rbac.authorization.k8s.io
+

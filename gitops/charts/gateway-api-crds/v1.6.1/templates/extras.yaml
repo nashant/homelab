@@ -1,0 +1,6 @@
+{{- if .Values.extras }}
+{{- range $path, $_ := .Files.Glob "extra-files/*.yaml" }}
+---
+{{ $.Files.Get $path }}
+{{- end }}
+{{- end }}

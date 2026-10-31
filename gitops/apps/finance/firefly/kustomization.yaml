@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ./helmrepository.yaml
+- ./firefly-es.yaml
+- ./mariadb.yaml
+- ./pvc.yaml
+- ./helmrelease.yaml            # firefly-iii chart
+- ./cronjob.yaml
+- ./importer.helmrelease.yaml   # importer chart
+- ./importer.ingress.yaml
+- ./upload-helper.yaml
+
+# Static page served by busybox at /upload/ (mounted from this ConfigMap in upload-helper.yaml):
+# strips the Nationwide CSV preamble in the browser and offers the cleaned file for download. Everything else about an
+# import lives in import-configs/*.json (uploaded with the file in the importer UI) and in Firefly rules (rules/).
+configMapGenerator:
+- name: firefly-upload-helper
+  namespace: finance
+  files:
+  - upload-helper/index.html
+  - upload-helper/rules.json
+  options:
+    disableNameSuffixHash: true   # kubectl apply -k does not prune; keep the name stable and rely on kubelet CM sync
+    labels:
+      app: firefly-importer

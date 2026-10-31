@@ -1,0 +1,39 @@
+apiVersion: platform.nashes.uk/v1alpha1
+kind: IRSARole
+metadata:
+  name: external-dns
+  namespace: external-dns
+spec:
+  roleName: external-dns
+  oidcProvider: 23oak-k8s-oidc.s3.eu-west-2.amazonaws.com
+  serviceAccounts:
+  - external-dns
+  policies:
+    route53: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "route53:ChangeResourceRecordSets",
+              "route53:ListResourceRecordSets",
+              "route53:ListTagsForResources"
+            ],
+            "Resource": [
+              "arn:aws:route53:::hostedzone/Z00208643MDVX02TG9N7X",
+              "arn:aws:route53:::hostedzone/Z0394221315X4TFZ9379C",
+              "arn:aws:route53:::hostedzone/Z0824775IQEX8J6LW8YI"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "route53:ListHostedZones"
+            ],
+            "Resource": [
+              "*"
+            ]
+          }
+        ]
+      }

@@ -1,0 +1,216 @@
+# Authoritative BIND for the private nashes.uk / 23oak.uk zones; external-dns-bind is the only writer
+# (RFC2136 + TSIG). Unbound and CoreDNS reach it on ClusterIP 172.31.0.53 (BGP-advertised). No recursion.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: bind
+  namespace: bind
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: platform-critical
+      securityContext:
+        runAsUser: 53   # the image's bind user
+        runAsGroup: 53
+        fsGroup: 53
+    serviceAccount:
+      bind: {}
+    controllers:
+      main:
+        strategy: Recreate   # RWO zone volume
+        serviceAccount:
+          identifier: bind
+        initContainers:
+          # Gets the TSIG key from Secret external-dns/bind-tsig, creating it on first start, and writes
+          # it for named. The only container with an API token. Rotate: delete the Secret, restart both.
+          tsig:
+            image:
+              repository: docker.io/alpine/kubectl
+              tag: 1.37.1@sha256:a5d0fbecab3f7b6c2ab7398f1daa73a3e0ed6ece18556d21698233e9e3759cc7
+            command: [/bin/sh, -c]
+            args:
+            - |
+              set -eu
+              ns=external-dns name=bind-tsig
+              current() { kubectl get secret -n "$ns" "$name" -o jsonpath='{.data.secret}' 2>/dev/null | base64 -d; }
+              key=$(current || true)
+              if [ -z "$key" ]; then
+                kubectl create secret generic "$name" -n "$ns" --dry-run=client -o yaml \
+                    --from-literal=secret="$(head -c 32 /dev/urandom | base64)" \
+                  | kubectl annotate --local -f - -o yaml \
+                    kubernetes.io/description="TSIG key for external-dns-bind, created by the bind tsig init container. Rotate: delete, restart bind, then external-dns-bind." \
+                  | kubectl create -f - >/dev/null || true   # lost a race: read the winner's key
+                key=$(current)
+              fi
+              [ -n "$key" ] || { echo "no TSIG key in $ns/$name" >&2; exit 1; }
+              printf 'key "external-dns" {\n\talgorithm hmac-sha256;\n\tsecret "%s";\n};\n' "$key" > /keys/external-dns.key
+              echo "TSIG key ready ($ns/$name)"
+            env:
+              HOME: /tmp
+            securityContext: &securityContext
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: [ALL]}
+          # Seeds a zone file only if the volume has none; afterwards named owns it (journal + dumps).
+          zones:
+            image: &image
+              repository: docker.io/internetsystemsconsortium/bind9
+              tag: 9.20@sha256:66092edb53c081fa11b1fa8219e99065b0f497cb38f568ba789702a4c10e2590
+            command: [/bin/sh, -c]
+            args:
+            - |
+              set -eu
+              for z in nashes.uk 23oak.uk; do [ -f /var/lib/bind/$z.db ] || cp /seed/$z.db /var/lib/bind/$z.db; done
+              named-checkconf -z /etc/bind/named.conf
+            securityContext: *securityContext
+        containers:
+          app:
+            image: *image
+            command: [named, -g, -c, /etc/bind/named.conf]
+            securityContext: *securityContext
+            probes:
+              liveness: &probe
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket: {port: 1053}
+                  periodSeconds: 10
+              readiness: *probe
+            resources:
+              requests: {cpu: 10m, memory: 32Mi}
+              limits: {memory: 256Mi}
+    service:
+      app:
+        controller: main
+        clusterIP: 172.31.0.53
+        ports:
+          dns-udp: {port: 53, targetPort: 1053, protocol: UDP}
+          dns-tcp: {port: 53, targetPort: 1053, protocol: TCP}
+    configMaps:
+      config:
+        data:
+          named.conf: |
+            options {
+              directory "/var/cache/bind";
+              listen-on port 1053 { any; };
+              listen-on-v6 { none; };
+              pid-file none;
+              recursion no;
+              allow-recursion { none; };
+              allow-query { any; };
+              allow-transfer { none; };
+              notify no;
+              dnssec-validation no;
+              version none;
+              hostname none;
+              server-id none;
+            };
+            controls { };
+            include "/etc/bind/keys/external-dns.key";
+            zone "nashes.uk" {
+              type primary;
+              file "/var/lib/bind/nashes.uk.db";
+              update-policy { grant external-dns zonesub A AAAA CNAME TXT; };
+              allow-transfer { key "external-dns"; };
+            };
+            zone "23oak.uk" {
+              type primary;
+              file "/var/lib/bind/23oak.uk.db";
+              update-policy { grant external-dns zonesub A AAAA CNAME TXT; };
+              allow-transfer { key "external-dns"; };
+            };
+          # Seeds only. Negative TTL 60s, so Unbound stops caching NXDOMAIN for new hosts for an hour.
+          nashes.uk.db: |
+            $TTL 300
+            @	IN SOA ns1.nashes.uk. hostmaster.nashes.uk. ( 1 3600 600 86400 60 )
+            	IN NS ns1.nashes.uk.
+            ns1	IN A 172.31.0.53
+          23oak.uk.db: |
+            $TTL 300
+            @	IN SOA ns1.23oak.uk. hostmaster.23oak.uk. ( 1 3600 600 86400 60 )
+            	IN NS ns1.23oak.uk.
+            ns1	IN A 172.31.0.53
+    persistence:
+      config:
+        type: configMap
+        identifier: config
+        advancedMounts:
+          main:
+            app:
+            - {path: /etc/bind/named.conf, subPath: named.conf, readOnly: true}
+            zones:
+            - {path: /etc/bind/named.conf, subPath: named.conf, readOnly: true}
+            - {path: /seed, readOnly: true}
+      zones:
+        type: persistentVolumeClaim
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 1Gi
+        advancedMounts:
+          main:
+            app: [{path: /var/lib/bind}]
+            zones: [{path: /var/lib/bind}]
+      keys:
+        type: emptyDir
+        medium: Memory
+        advancedMounts:
+          main:
+            tsig: [{path: /keys}]
+            zones: [{path: /etc/bind/keys, readOnly: true}]
+            app: [{path: /etc/bind/keys, readOnly: true}]
+      api-token:
+        type: projected
+        sources:
+        - serviceAccountToken: {path: token, expirationSeconds: 600}
+        - configMap:
+            name: kube-root-ca.crt
+            items: [{key: ca.crt, path: ca.crt}]
+        advancedMounts:
+          main:
+            tsig: [{path: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}]
+      tmp:
+        type: emptyDir
+        advancedMounts:
+          main:
+            tsig: [{path: /tmp}]
+      cache:
+        type: emptyDir
+        advancedMounts:
+          main:
+            app: [{path: /var/cache/bind}]
+      run:
+        type: emptyDir
+        advancedMounts:
+          main:
+            app: [{path: /run/named}]
+    networkpolicies:
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - ipBlock: {cidr: 172.16.0.1/32}   # OPNsense Unbound
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: kube-system
+              podSelector:
+                matchLabels:
+                  k8s-app: kube-dns
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: external-dns
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: external-dns-bind
+            ports:
+            - {protocol: UDP, port: 1053}
+            - {protocol: TCP, port: 1053}
+          egress:
+          # tsig init container -> API server, which pods reach on the node IPs
+          - to:
+            - ipBlock: {cidr: 172.16.0.10/32}
+            - ipBlock: {cidr: 172.16.0.12/32}
+            - ipBlock: {cidr: 172.16.0.13/32}
+            ports:
+            - {protocol: TCP, port: 6443}

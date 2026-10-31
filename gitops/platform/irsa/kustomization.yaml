@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- webhook.helmrelease.yaml
+- jwks-sync.cronjob.yaml
+- jwks-sync.certificates.yaml
+- jwks-sync.iam.yaml
+- rolesanywhere-sync.yaml
+- oidc-bucket.policy.yaml

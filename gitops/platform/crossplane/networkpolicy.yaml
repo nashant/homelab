@@ -1,0 +1,102 @@
+# Policies for crossplane-system; the default deny is cluster-wide
+# (platform/cilium/default-deny.ccnp.yaml). Peers come from the 2026-10-30 traffic capture, the
+# admission and CRD conversion webhooks, and the package sources. Package images are pulled by the
+# kubelet, not over the pod network.
+
+# Crossplane, the RBAC manager and the providers all watch the API server. The functions do not.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: apiserver
+  namespace: crossplane-system
+spec:
+  podSelector:
+    matchExpressions:
+    - {key: pkg.crossplane.io/function, operator: DoesNotExist}
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: crossplane
+  namespace: crossplane-system
+spec:
+  podSelector:
+    matchLabels:
+      app: crossplane
+  policyTypes: [Ingress, Egress]
+  ingress:
+  # crossplane-webhooks, called by the API servers
+  - from:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 9443}
+  egress:
+  # Composition functions (gRPC)
+  - to:
+    - podSelector:
+        matchExpressions:
+        - {key: pkg.crossplane.io/function, operator: Exists}
+    ports:
+    - {protocol: TCP, port: 9443}
+  # Package metadata from xpkg.upbound.io
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    ports:
+    - {protocol: TCP, port: 443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: functions
+  namespace: crossplane-system
+spec:
+  podSelector:
+    matchExpressions:
+    - {key: pkg.crossplane.io/function, operator: Exists}
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: crossplane
+    ports:
+    - {protocol: TCP, port: 9443}
+---
+# The API servers call the providers' CRD conversion webhooks. The AWS providers call the AWS APIs
+# and STS (IRSA).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: providers
+  namespace: crossplane-system
+spec:
+  podSelector:
+    matchExpressions:
+    - {key: pkg.crossplane.io/provider, operator: Exists}
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 9443}
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    ports:
+    - {protocol: TCP, port: 443}

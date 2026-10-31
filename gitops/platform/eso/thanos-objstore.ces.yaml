@@ -1,0 +1,30 @@
+# Cluster-scoped: one definition materialises a `thanos-objstore` ExternalSecret
+# (and Secret, key objstore.yml) into BOTH the thanos and monitoring namespaces.
+# Lives here (not platform/thanos) because that kustomization sets a namespace
+# transformer, which is invalid for a cluster-scoped resource.
+apiVersion: external-secrets.io/v1
+kind: ClusterExternalSecret
+metadata:
+  name: thanos-objstore
+spec:
+  externalSecretName: thanos-objstore
+  namespaceSelectors:
+  - matchExpressions:
+    - key: kubernetes.io/metadata.name
+      operator: In
+      values:
+      - thanos
+      - monitoring
+  refreshTime: 1h
+  externalSecretSpec:
+    refreshInterval: 1h
+    secretStoreRef:
+      name: aws-ssm
+      kind: ClusterSecretStore
+    target:
+      name: thanos-objstore
+      creationPolicy: Owner
+    data:
+    - secretKey: objstore.yml
+      remoteRef:
+        key: /k8s/thanos/objstore

@@ -1,0 +1,73 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: tempo
+  namespace: tempo
+spec:
+  releaseName: tempo
+  interval: 10m
+  timeout: 20m
+  chart:
+    spec:
+      chart: tempo
+      # grafana/tempo is deprecated (moved to grafana-community). Tempo 3.x reads the existing
+      # vParquet4 blocks; 3.0.0-3.1.0 ignored block_retention, so stay on >= 3.2.0.
+      version: 3.2.1
+      sourceRef:
+        kind: HelmRepository
+        name: grafana-community
+        namespace: flux-system
+      interval: 1m
+  dependsOn:
+  - namespace: longhorn-system
+    name: longhorn
+  - namespace: seaweedfs
+    name: seaweedfs
+  values:
+    tempo:
+      retention: 4320h                  # 180d (backend scheduler/worker block_retention)
+      reportingEnabled: false           # no usage reports to stats.grafana.org (blocked by policy too)
+      # The chart reads tempo.resources; a top-level resources: is ignored (it was, until 2026-10-30).
+      # 2.9 peaked at 871Mi working set over 7d; 3.x also runs compaction in-process, hence 1.5Gi.
+      resources:
+        requests:
+          cpu: 50m
+          memory: 256Mi
+        limits:
+          memory: 1536Mi
+      storage:
+        trace:
+          backend: s3
+          s3:
+            bucket: tempo
+            endpoint: seaweedfs-s3.seaweedfs:8333
+            insecure: true              # http to in-cluster SeaweedFS
+            # access_key/secret_key omitted on purpose — Tempo's S3 client uses
+            # the credential chain, picking up AWS_ACCESS_KEY_ID/SECRET from the
+            # tempo-s3 secret (extraEnvFrom below). Keeps creds out of config.
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+        jaeger:
+          protocols:
+            thrift_http:
+              endpoint: 0.0.0.0:14268
+      metricsGenerator:
+        enabled: false                  # needs Prometheus remote_write — defer
+      extraEnvFrom:
+      - secretRef:
+          name: tempo-s3
+    persistence:
+      enabled: true                     # local WAL only; blocks live in S3
+      storageClassName: longhorn
+      size: 10Gi
+      accessModes:
+      - ReadWriteOnce
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: kube-prometheus

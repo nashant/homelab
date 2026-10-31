@@ -1,0 +1,36 @@
+# Policies for cnpg-system; the default deny is cluster-wide
+# (platform/cilium/default-deny.ccnp.yaml). Peers come from the 2026-10-30 traffic capture and the
+# admission webhooks. The operator polls each instance manager on 8000 and may connect to PostgreSQL
+# on 5432; the instance namespaces allow both (finance: cnpg-instances).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cloudnative-pg
+  namespace: cnpg-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cloudnative-pg
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 9443}
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchExpressions:
+        - {key: cnpg.io/cluster, operator: Exists}
+    ports:
+    - {protocol: TCP, port: 8000}
+    - {protocol: TCP, port: 5432}

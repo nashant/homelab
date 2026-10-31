@@ -1,0 +1,100 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: radbalance
+  namespace: automation
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: apps-high
+      # Service links would inject RADBALANCE_PORT=tcp://… (the Service is named radbalance), which
+      # collides with the app's own RADBALANCE_PORT setting.
+      enableServiceLinks: false
+      securityContext:
+        runAsUser: 65532
+        runAsGroup: 65532
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            image:
+              repository: registry.nashes.uk/radbalance
+              tag: 0.3.1@sha256:02ac1fb505a9f3193ccdf63d04bac966e3d628a04e4cbd15ab5e2407f10b6987
+              pullPolicy: Always
+            env:
+              TZ: Europe/London
+            probes:
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/catalogue
+                    port: 8765
+                  periodSeconds: 10
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/catalogue
+                    port: 8765
+                  periodSeconds: 30
+                  failureThreshold: 4
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: [ALL]
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                cpu: "2"
+                memory: 1Gi
+    service:
+      app:
+        controller: main
+        ports:
+          http:
+            port: 8765
+    # LAN only, on the private Traefik, which terminates HTTPS: the walk page needs a secure context
+    # for the Screen Wake Lock (spec A27), and the phone never talks to a board itself (spec 1).
+    ingress:
+      private:
+        className: private-traefik
+        forceRename: radbalance-private
+        hosts:
+        - host: &nashes radbalance.nashes.uk
+          paths:
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: app
+              port: http
+        tls:
+        - hosts: [*nashes]
+    # Board hosts are set per house in the app, so the boards' ESPHome web_server (port 80) is
+    # allowed across the LAN.
+    networkpolicies:
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: traefik
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: private-traefik
+            ports:
+            - {protocol: TCP, port: 8765}
+          egress:
+          - to:
+            - ipBlock: {cidr: 172.16.0.0/24}
+            ports:
+            - {protocol: TCP, port: 80}

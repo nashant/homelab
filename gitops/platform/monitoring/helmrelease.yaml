@@ -1,0 +1,276 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus
+  namespace: monitoring
+spec:
+  releaseName: kube-prometheus
+  interval: 10m
+  timeout: 30m
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: 92.16.1
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+        namespace: flux-system
+      interval: 1m
+  # The operator CRDs live in the chart's crds subchart, which Helm installs once and never upgrades.
+  install:
+    crds: CreateReplace
+  upgrade:
+    crds: CreateReplace
+  dependsOn:
+  - namespace: longhorn-system
+    name: longhorn
+  - namespace: cert-manager
+    name: cert-manager
+  values:
+    fullnameOverride: kube-prometheus
+
+    # Pick up ServiceMonitors / PrometheusRules in every namespace,
+    # not just those carrying the release label.
+    prometheus:
+      prometheusSpec:
+        priorityClassName: platform-high
+        # Local retention dropped to 2d — long-term storage lives in SeaweedFS
+        # S3 via the Thanos sidecar (thanos bucket), queried back through the
+        # separate Thanos store/query layer (B3).
+        retention: 2d
+        thanos:
+          objectStorageConfig:
+            existingSecret:
+              name: thanos-objstore
+              key: objstore.yml
+        scrapeInterval: 30s
+        evaluationInterval: 30s
+        serviceMonitorSelectorNilUsesHelmValues: false
+        podMonitorSelectorNilUsesHelmValues: false
+        ruleSelectorNilUsesHelmValues: false
+        probeSelectorNilUsesHelmValues: false
+        scrapeConfigSelectorNilUsesHelmValues: false
+        enableAdminAPI: false
+        walCompression: true
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: longhorn
+              accessModes: [ReadWriteOnce]
+              resources:
+                requests:
+                  storage: 50Gi
+        resources:
+          requests:
+            cpu: 200m
+            memory: 1Gi
+          limits:
+            memory: 4Gi
+
+    alertmanager:
+      enabled: true
+      alertmanagerSpec:
+        # Mount the pushover-credentials Secret at
+        # /etc/alertmanager/secrets/pushover-credentials/{user_key,token}.
+        # Receivers below reference those files via *_file.
+        secrets:
+        - pushover-credentials
+        storage:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: longhorn
+              accessModes: [ReadWriteOnce]
+              resources:
+                requests:
+                  storage: 1Gi
+      config:
+        global:
+          resolve_timeout: 5m
+        route:
+          receiver: pushover-low
+          group_by: [alertname, severity, namespace]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 12h
+          routes:
+          # Always-firing helpers (dead-man's switch, info inhibitor): never notify.
+          - matchers: [alertname =~ "Watchdog|InfoInhibitor"]
+            receiver: "null"
+          - matchers: [severity = "catastrophic"]
+            receiver: pushover-emergency
+            group_wait: 0s
+            repeat_interval: 30m
+            continue: false
+          - matchers: [severity = "critical"]
+            receiver: pushover-high
+            group_wait: 10s
+            repeat_interval: 1h
+            continue: false
+          - matchers: [severity = "warning"]
+            receiver: pushover-normal
+            repeat_interval: 4h
+            continue: false
+          - matchers: [severity = "info"]
+            receiver: pushover-low
+            repeat_interval: 24h
+            continue: false
+        inhibit_rules:
+        # Critical and below silenced while catastrophic fires for the same node.
+        - source_matchers: [severity = "catastrophic"]
+          target_matchers: [severity =~ "critical|warning|info"]
+          equal: [namespace]
+        receivers:
+        - name: "null"
+        - name: pushover-emergency
+          pushover_configs:
+          - user_key_file: /etc/alertmanager/secrets/pushover-credentials/user_key
+            token_file: /etc/alertmanager/secrets/pushover-credentials/token
+            priority: 2
+            retry: 1m      # durations need units; bare 60/3600 stopped Alertmanager from ever starting
+            expire: 1h
+            send_resolved: true
+            title: '[CATASTROPHIC] {{ .CommonLabels.alertname }}'
+            message: |
+              {{ range .Alerts -}}
+              {{ .Annotations.summary }}
+              {{ .Annotations.description }}
+              {{ end }}
+        - name: pushover-high
+          pushover_configs:
+          - user_key_file: /etc/alertmanager/secrets/pushover-credentials/user_key
+            token_file: /etc/alertmanager/secrets/pushover-credentials/token
+            priority: 1
+            send_resolved: true
+            title: '[CRITICAL] {{ .CommonLabels.alertname }}'
+            message: |
+              {{ range .Alerts -}}
+              {{ .Annotations.summary }}
+              {{ .Annotations.description }}
+              {{ end }}
+        - name: pushover-normal
+          pushover_configs:
+          - user_key_file: /etc/alertmanager/secrets/pushover-credentials/user_key
+            token_file: /etc/alertmanager/secrets/pushover-credentials/token
+            priority: 0
+            send_resolved: true
+            title: '[WARN] {{ .CommonLabels.alertname }}'
+            message: |
+              {{ range .Alerts -}}
+              {{ .Annotations.summary }}
+              {{ .Annotations.description }}
+              {{ end }}
+        - name: pushover-low
+          pushover_configs:
+          - user_key_file: /etc/alertmanager/secrets/pushover-credentials/user_key
+            token_file: /etc/alertmanager/secrets/pushover-credentials/token
+            priority: -1
+            send_resolved: false
+            title: '[INFO] {{ .CommonLabels.alertname }}'
+            message: |
+              {{ range .Alerts -}}
+              {{ .Annotations.summary }}
+              {{ end }}
+
+    grafana:
+      enabled: true
+      # Admin credential lives in Secret grafana-admin, generated in-cluster and never in git.
+      # People log in through oauth2-proxy (auth.proxy below); the sidecars use it for reloads.
+      admin:
+        existingSecret: grafana-admin
+        userKey: admin-user
+        passwordKey: admin-password
+      deploymentStrategy:
+        type: Recreate   # RWO data volume
+      defaultDashboardsTimezone: Europe/London
+      persistence:
+        enabled: true
+        storageClassName: longhorn
+        size: 10Gi
+        accessModes: [ReadWriteOnce]
+      serviceMonitor:
+        enabled: true
+      # Repoint Grafana's default "Prometheus" datasource (uid: prometheus) at
+      # the Thanos Querier so dashboards span the full 180d retention (B3),
+      # not just Prometheus's 2d local window. Thanos Query speaks the
+      # Prometheus HTTP API, so existing dashboards work unchanged.
+      sidecar:
+        datasources:
+          url: http://thanos-query.thanos.svc.cluster.local:9090/
+      grafana.ini:
+        server:
+          root_url: https://grafana.nashes.uk
+        auth:
+          disable_login_form: true
+          disable_signout_menu: false
+        auth.proxy:
+          enabled: true
+          header_name: X-Auth-Request-Email
+          header_property: email
+          auto_sign_up: true
+          headers: "Name:X-Auth-Request-User Email:X-Auth-Request-Email"
+          # Only the Traefik pods (Cilium pool "ingress") may assert identity; Grafana checks the TCP peer.
+          whitelist: 172.30.16.0/26
+        auth.anonymous:
+          enabled: false
+        users:
+          auto_assign_org_role: Admin
+      additionalDataSources:
+      - name: Loki
+        type: loki
+        url: http://loki.loki.svc.cluster.local:3100
+        access: proxy
+        jsonData:
+          maxLines: 1000
+      - name: Tempo
+        type: tempo
+        url: http://tempo.tempo.svc.cluster.local:3200
+        access: proxy
+        jsonData:
+          tracesToLogsV2:
+            datasourceUid: loki
+
+    # Components we don't or can't scrape on K3s + Cilium.
+    kubeProxy:
+      enabled: false           # Cilium replaces kube-proxy
+    kubeControllerManager:
+      enabled: false           # K3s embeds this in k3s-server, not exposed
+    kubeScheduler:
+      enabled: false           # ditto
+    kubeEtcd:
+      enabled: false           # K3s uses sqlite by default
+    coreDns:
+      enabled: true
+    kubelet:
+      enabled: true
+    kubeApiServer:
+      enabled: true
+
+    # Default ServiceMonitors for components we control via this chart.
+    nodeExporter:
+      enabled: true
+    kube-state-metrics:
+      priorityClassName: platform-high
+      enabled: true
+
+    prometheus-node-exporter:
+      priorityClassName: platform-high
+      hostRootFsMount:
+        enabled: true
+
+    prometheusOperator:
+      admissionWebhooks:
+        certManager:
+          enabled: true
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+
+    defaultRules:
+      create: true
+      rules:
+        etcd: false
+        kubeProxy: false
+        kubeSchedulerAlerting: false
+        kubeSchedulerRecording: false
+        kubeControllerManager: false

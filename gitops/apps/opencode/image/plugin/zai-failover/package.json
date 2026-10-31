@@ -1,0 +1,6 @@
+{
+  "name": "zai-failover",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Fail over to OpenRouter when the Z.AI coding plan weekly quota is exhausted, with an automatic session handover"
+}

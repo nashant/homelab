@@ -1,0 +1,13 @@
+# Egress: the OPNsense API and nothing else (no DNS needed, the URL is an IP).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: opnsense
+spec:
+  endpointSelector:
+    matchLabels:
+      app: opnsense
+  egress:
+  - toCIDR: [172.16.0.1/32]
+    toPorts:
+    - ports: [{port: "443", protocol: TCP}]

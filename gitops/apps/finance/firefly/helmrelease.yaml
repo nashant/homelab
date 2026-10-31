@@ -1,0 +1,100 @@
+# Firefly III core on the official chart. Database stays on the mariadb-operator CR in mariadb.yaml.
+# Not app-template, so the app-template-defaults component does not apply: spec fields are written
+# out here in full.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: firefly
+  namespace: finance
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: firefly-iii
+      version: 1.10.2
+      sourceRef:
+        kind: HelmRepository
+        name: firefly-iii
+        namespace: flux-system
+      interval: 1h
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+      strategy: rollback
+  driftDetection:
+    mode: warn
+  values:
+    # Keeps the Deployment/Service/ConfigMap/Ingress named `firefly`: the importer, firefly-cron
+    # and tools/ all call http://firefly:8080.
+    fullnameOverride: firefly
+    deploymentStrategyType: Recreate      # RWO upload PVC
+    image:
+      repository: fireflyiii/core
+      tag: version-6.7.9@sha256:4409f9f0f87378ba95d40811352f4f49338d276bb638c1e6d18a5579f332fbe8
+    podSecurityContext:
+      fsGroup: 33               # www-data; makes the upload PVC writeable
+      fsGroupChangePolicy: OnRootMismatch
+    persistence:
+      enabled: true
+      existingClaim: firefly-upload
+    service:
+      port: 8080
+    config:
+      env:
+        # Pod network is IPv4-only (Cilium); the image's nginx otherwise fails binding [::]:8080.
+        NGINX_LISTEN_IP_PROTOCOL: ipv4
+        APP_ENV: production
+        APP_URL: https://firefly.nashes.uk
+        TRUSTED_PROXIES: "**"
+        TZ: Europe/London
+        DEFAULT_LANGUAGE: en_GB
+        DEFAULT_LOCALE: equal
+        DB_CONNECTION: mysql
+        DB_HOST: firefly-db
+        DB_PORT: "3306"
+        DB_DATABASE: firefly
+        DB_USERNAME: firefly
+      # `env` entries win over the chart's envFrom, including the `firefly-app-key` Secret the
+      # chart always generates: APP_KEY must stay the ESO-managed one or encrypted data is lost.
+      envValueFrom:
+        DB_PASSWORD:
+          secretKeyRef: {name: firefly, key: db-password}
+        APP_KEY:
+          secretKeyRef: {name: firefly, key: app-key}
+        STATIC_CRON_TOKEN:
+          secretKeyRef: {name: firefly, key: cron-token}
+    # The chart would otherwise create a Secret named after the release (`firefly`) holding
+    # placeholder passwords, colliding with the ESO-managed Secret of the same name.
+    secrets:
+      env: null
+    livenessProbe: null
+    readinessProbe:
+      httpGet:
+        path: /health
+        port: http
+      periodSeconds: 10
+    startupProbe:
+      httpGet:
+        path: /health
+        port: http
+      periodSeconds: 10
+      failureThreshold: 30
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    ingress:
+      enabled: true
+      className: private-traefik
+      hosts:
+      - firefly.nashes.uk
+      tls:
+      - hosts:
+        - firefly.nashes.uk

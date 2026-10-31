@@ -1,0 +1,23 @@
+# Egress: DNS and Grafana's pod port. Grafana's own NetworkPolicy
+# (platform/monitoring/grafana.networkpolicy.yaml) admits this pod.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: grafana
+spec:
+  endpointSelector:
+    matchLabels:
+      app: grafana
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s:k8s-app: kube-dns
+    toPorts:
+    - ports: [{port: "53", protocol: ANY}]
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: monitoring
+        k8s:app.kubernetes.io/name: grafana
+    toPorts:
+    - ports: [{port: "3000", protocol: TCP}]

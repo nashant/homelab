@@ -1,0 +1,50 @@
+# Ingress only from the opencode pod; egress only to what an exchange needs:
+# GitHub's API, this cluster's OIDC discovery/JWKS in S3, and AWS STS (IRSA)
+# + KMS (signing).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: octo-sts
+  namespace: octo-sts
+spec:
+  endpointSelector: {}
+  ingress:
+  - fromEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: opencode
+        k8s:app: opencode
+    toPorts:
+    - ports: [{port: "8080", protocol: TCP}]
+  # kubelet probes
+  - fromEntities: [host]
+    toPorts:
+    - ports: [{port: "8080", protocol: TCP}]
+  egress:
+  - toEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: kube-system
+        k8s:k8s-app: kube-dns
+    toPorts:
+    - ports: [{port: "53", protocol: ANY}]
+      rules:
+        dns:
+        - matchPattern: "*"
+  - toFQDNs:
+    - matchName: api.github.com.
+    - matchName: 23oak-k8s-oidc.s3.eu-west-2.amazonaws.com.
+    - matchName: sts.eu-west-2.amazonaws.com.
+    - matchName: sts.amazonaws.com.
+    - matchName: kms.eu-west-2.amazonaws.com.
+    toPorts:
+    - ports: [{port: "443", protocol: TCP}]
+---
+# Standard default-deny next to the Cilium policies above, so a pod that no Cilium policy selects is
+# still closed. It adds no allow rules, so it does not change what those policies allow.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: octo-sts
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]

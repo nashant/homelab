@@ -1,0 +1,69 @@
+# Plain PostgreSQL 16 (pinned — MoneyMatter's Sequelize models require Postgres, and
+# mariadb-operator only does MySQL/MariaDB; no Postgres operator exists in-cluster).
+# Scoped to this app only, not a shared cluster-wide instance.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moneymatter-db
+  namespace: finance
+  labels:
+    app: moneymatter-db
+    part-of: moneymatter
+spec:
+  replicas: 0   # replaced by db.cluster.yaml (CNPG); kept for rollback until the owner deletes it
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: moneymatter-db
+  template:
+    metadata:
+      labels:
+        app: moneymatter-db
+        part-of: moneymatter
+    spec:
+      securityContext:
+        fsGroup: 999   # postgres image's uid/gid
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: postgres
+        image: postgres:16
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: postgres
+          containerPort: 5432
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        env:
+        - name: POSTGRES_USER
+          value: moneymatter
+        - name: POSTGRES_DB
+          value: moneymatter
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: moneymatter-secrets
+              key: DB_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "moneymatter", "-d", "moneymatter"]
+          periodSeconds: 10
+        startupProbe:
+          exec:
+            command: ["pg_isready", "-U", "moneymatter", "-d", "moneymatter"]
+          periodSeconds: 5
+          failureThreshold: 24
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: moneymatter-db

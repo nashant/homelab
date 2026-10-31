@@ -1,0 +1,31 @@
+# The IRSA OIDC bucket allows public read only. jwks-sync writes with its own IAM role (jwks-sync.iam.yaml),
+# so the policy has no write statement. Crossplane never deletes the policy: without public read, AWS STS
+# cannot fetch the keys and every IRSA token exchange fails.
+apiVersion: s3.aws.m.upbound.io/v1beta1
+kind: BucketPolicy
+metadata:
+  name: oidc
+  namespace: kube-system
+  annotations:
+    crossplane.io/external-name: 23oak-k8s-oidc   # imported by bucket name
+spec:
+  managementPolicies: ["Observe", "Create", "Update", "LateInitialize"]
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    region: eu-west-2
+    bucket: 23oak-k8s-oidc
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "PublicReadForOIDC",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::23oak-k8s-oidc/*"
+          }
+        ]
+      }

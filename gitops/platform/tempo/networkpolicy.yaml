@@ -1,0 +1,55 @@
+# Policies for tempo; the default deny is cluster-wide (platform/cilium/default-deny.ccnp.yaml).
+# Peers come from the 2026-10-30 traffic capture plus the receivers in the HelmRelease. Usage
+# reporting is off, so nothing needs the internet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tempo
+  namespace: tempo
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: tempo
+  policyTypes: [Ingress, Egress]
+  ingress:
+  # Queries from Grafana, scrapes from Prometheus, the API server service proxy
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: grafana
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 3200}
+  # Spans: the receivers in the HelmRelease. Traefik is the only sender.
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+    ports:
+    - {protocol: TCP, port: 4317}
+    - {protocol: TCP, port: 4318}
+    - {protocol: TCP, port: 14268}
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: seaweedfs
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/component: s3
+    ports:
+    - {protocol: TCP, port: 8333}

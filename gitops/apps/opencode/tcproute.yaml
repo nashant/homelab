@@ -1,0 +1,18 @@
+# SSH over TLS on private-traefik's 443 (LAN/VPN only). Traefik terminates
+# TLS with the default wildcard cert, routes on SNI, and forwards plain TCP to
+# sshd. Clients connect with an openssl ProxyCommand (README.md "Connect").
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: herdr
+  namespace: opencode
+  annotations:
+    kubernetes.io/ingress.class: private-traefik
+spec:
+  entryPoints: [websecure]
+  routes:
+  - match: HostSNI(`herdr.nashes.uk`)
+    services:
+    - name: opencode
+      port: 2222
+  tls: {}

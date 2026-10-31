@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: automation
+resources:
+- ./predbat-es.yaml
+- ./helmrelease.yaml
+components:
+- ../../../components/app-template-defaults
+
+# apps.yaml is GitOps-managed: mounted read-only over /config/apps.yaml, so the Predbat
+# web editor cannot change it. The hash suffix rolls the pod on every change: the
+# nameReference in nameref.yaml rewrites the HelmRelease's configMap persistence name to it.
+configMapGenerator:
+- name: predbat-apps
+  files:
+  - apps.yaml
+configurations:
+- nameref.yaml

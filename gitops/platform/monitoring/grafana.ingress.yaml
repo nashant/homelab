@@ -1,0 +1,61 @@
+# Grafana trusts X-Auth-Request-Email (auth.proxy). Drop any client-sent X-Auth-Request-* before
+# oauth2-proxy runs, so the only values Grafana sees are the ones oauth2-proxy returns.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-auth-headers
+  namespace: monitoring
+spec:
+  headers:
+    customRequestHeaders:
+      X-Auth-Request-Email: ""
+      X-Auth-Request-User: ""
+      X-Auth-Request-Access-Token: ""
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-public
+  namespace: monitoring
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: monitoring-strip-auth-headers@kubernetescrd,oauth2-proxy-oauth2-proxy@kubernetescrd
+    external-dns.alpha.kubernetes.io/target: home.nashes.uk
+spec:
+  ingressClassName: public-traefik
+  rules:
+  - host: &h grafana.nashes.uk
+    http:
+      paths:
+      - pathType: ImplementationSpecific
+        backend:
+          service:
+            name: kube-prometheus-grafana
+            port:
+              number: 80
+  tls:
+  - hosts: [*h]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-private
+  namespace: monitoring
+  annotations:
+    # Grafana has no login form (auth.proxy only), so the LAN path must also
+    # enforce oauth2-proxy. Host is grafana.nashes.uk (not 23oak.uk) because
+    # the Cognito session cookie is scoped to .nashes.uk.
+    traefik.ingress.kubernetes.io/router.middlewares: monitoring-strip-auth-headers@kubernetescrd,oauth2-proxy-oauth2-proxy@kubernetescrd
+spec:
+  ingressClassName: private-traefik
+  rules:
+  - host: &h grafana.nashes.uk
+    http:
+      paths:
+      - pathType: ImplementationSpecific
+        backend:
+          service:
+            name: kube-prometheus-grafana
+            port:
+              number: 80
+  tls:
+  - hosts: [*h]

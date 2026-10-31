@@ -1,0 +1,81 @@
+# CNCF Distribution registry (https://github.com/distribution/distribution), LAN-only image
+# store at registry.nashes.uk. Stateless: every blob and manifest lives in the `registry`
+# bucket on the in-cluster SeaweedFS S3 gateway, so this can run >1 replica and needs no PVC
+# (and no Longhorn nightly label). No auth on purpose: it is only reachable via
+# private-traefik, matching the rest of the LAN-only services.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: registry
+  labels:
+    app: registry
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: registry
+  template:
+    metadata:
+      labels:
+        app: registry
+    spec:
+      priorityClassName: platform-high
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app: registry
+      containers:
+      - name: registry
+        image: registry:3.1.1
+        imagePullPolicy: IfNotPresent
+        args:
+        - serve
+        - /etc/distribution/config.yml
+        ports:
+        - name: http
+          containerPort: 5000
+        - name: metrics
+          containerPort: 5001
+        envFrom:
+        - secretRef:
+            name: registry-s3
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        # /v2/ is the API version check; it only returns 200 once the storage driver has
+        # initialised, so it doubles as a "can I reach the bucket" probe at startup.
+        startupProbe:
+          httpGet:
+            path: /v2/
+            port: http
+          periodSeconds: 5
+          failureThreshold: 24
+        readinessProbe:
+          httpGet:
+            path: /v2/
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /debug/health
+            port: metrics
+          periodSeconds: 30
+        volumeMounts:
+        - name: config
+          mountPath: /etc/distribution/config.yml
+          subPath: config.yml
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: registry-config

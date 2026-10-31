@@ -1,0 +1,147 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: sonarr
+  namespace: media
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: apps-high
+      # raw Deployment had enableServiceLinks true (k8s default)
+      enableServiceLinks: true
+      annotations:
+        fluentbit.io/parser: sonarr
+        # egress via the VPN pool
+        ipam.cilium.io/ip-pool: vpn
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
+      labels:
+        app: sonarr
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            image:
+              repository: ghcr.io/linuxserver/sonarr
+              tag: 4.0.20.3014-ls1@sha256:889dcc58c6aea859033985894b519b2e6b1e55d92527ed123f9f52e42ae7c97b
+            ports:
+              - name: http
+                containerPort: 8989
+            probes:
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /
+                    port: 8989
+                  initialDelaySeconds: 30
+                  periodSeconds: 30
+            resources:
+              requests:
+                cpu: 400m
+                memory: 300M
+              limits:
+                cpu: "1"
+                memory: 600M
+    service:
+      app:
+        controller: main
+        ports:
+          http:
+            port: 8989
+    ingress:
+      public:
+        className: public-traefik
+        annotations:
+          traefik.ingress.kubernetes.io/router.middlewares: oauth2-proxy-oauth2-proxy@kubernetescrd
+          external-dns.alpha.kubernetes.io/target: home.nashes.uk
+        hosts:
+          - host: &nashes sonarr.nashes.uk
+            paths: &paths
+              - path: /
+                pathType: ImplementationSpecific
+                service:
+                  identifier: app
+                  port: http
+        tls:
+          - hosts: [*nashes]
+      private:
+        className: private-traefik
+        hosts:
+          - host: &oak sonarr.23oak.uk
+            paths: *paths
+          - host: *nashes
+            paths: *paths
+        tls:
+          - hosts: [*oak, *nashes]
+    persistence:
+      config:
+        forceRename: sonarr-config
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 5Gi
+        globalMounts:
+          - path: /config
+      storage:
+        type: nfs
+        server: 172.16.0.10
+        path: /mnt/storage
+        globalMounts:
+          - path: /mnt/storage
+    networkpolicies:
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: traefik
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: traefik
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: bazarr
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: requestrr
+            ports:
+            - {protocol: TCP, port: 8989}
+          egress:
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: jackett
+            ports:
+            - {protocol: TCP, port: 9117}
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: qbittorrent
+            ports:
+            - {protocol: TCP, port: 8080}
+          # Plex library refresh after an import
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: plex-media-server
+            ports:
+            - {protocol: TCP, port: 32400}
+          - to:
+            - ipBlock:
+                cidr: 0.0.0.0/0
+                except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+            ports:
+            - {protocol: TCP, port: 443}
+            - {protocol: TCP, port: 80}

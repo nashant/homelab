@@ -1,0 +1,47 @@
+# Default-deny for vpn; each app gets only the peers seen in the 2026-10-28 traffic capture.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vpn-pf
+  namespace: vpn
+spec:
+  podSelector:
+    matchLabels:
+      app: vpn-pf
+  policyTypes: [Ingress, Egress]
+  egress:
+  # PIA port-forward API on the tunnel gateway
+  - to:
+    - ipBlock: {cidr: 10.0.0.0/8}
+    ports:
+    - {protocol: TCP, port: 19999}
+  # OPNsense API (alias updates)
+  - to:
+    - ipBlock: {cidr: 172.16.0.1/32}
+    ports:
+    - {protocol: TCP, port: 443}
+  # qBittorrent WebUI API (announce_port)
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: media
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: qbittorrent
+    ports:
+    - {protocol: TCP, port: 8080}
+  # PIA token API, and apk at start-up
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    ports:
+    - {protocol: TCP, port: 443}
+    - {protocol: TCP, port: 80}
+  # API server: pods reach it on the node IPs (needs policyCIDRMatchMode nodes)
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}

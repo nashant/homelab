@@ -1,0 +1,10 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: system-upgrade-controller
+  namespace: rancher
+spec:
+  interval: 60m
+  url: https://github.com/rancher/system-upgrade-controller.git
+  ref:
+    branch: master

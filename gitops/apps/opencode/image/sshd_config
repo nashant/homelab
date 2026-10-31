@@ -1,0 +1,27 @@
+# Unprivileged sshd (uid 1000) for herdr remote attach. Reached only through
+# private-traefik (TLS, SNI herdr.nashes.uk) -> Service :2222; see ../tcproute.yaml.
+Port 2222
+HostKey /home/opencode/.ssh/host/ssh_host_ed25519_key
+PidFile none
+
+AllowUsers opencode
+PermitRootLogin no
+PubkeyAuthentication yes
+# Copied from the ConfigMap at boot: sshd's StrictModes rejects the mount's
+# group-writable volume dir.
+AuthorizedKeysFile .ssh/authorized_keys
+# $HOME is the PVC root (root:1000 2775 via fsGroup) and every process here is
+# uid 1000, so StrictModes' group-write check only blocks logins.
+StrictModes no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+
+# Sessions don't inherit the container env; the entrypoint writes
+# ~/.ssh/environment (in-cluster API, HASS_TOKEN_FILE, PATH).
+PermitUserEnvironment yes
+
+AllowTcpForwarding no
+X11Forwarding no
+PermitTunnel no
+Subsystem sftp internal-sftp
+LogLevel INFO

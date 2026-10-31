@@ -1,0 +1,144 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: homeassistant-dev
+  namespace: automation
+spec:
+  values:
+    defaultPodOptions:
+      labels:
+        app: homeassistant-dev   # mcp/ha-dev CiliumNetworkPolicy selects on this
+      securityContext:
+        # HA runs as root; ha-mcp's USER is the name `mcpuser`, which only works
+        # with runAsNonRoot off. The pre-chart pod had no seccomp profile (Unconfined).
+        runAsNonRoot: false
+        seccompProfile:
+          type: Unconfined
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            nameOverride: homeassistant
+            # Pinned to the version prod ran when dev was created. Bump this manually
+            # when prod updates so dev/prod stay in lockstep.
+            image:
+              repository: ghcr.io/home-assistant/home-assistant
+              tag: 2026.8.0@sha256:a21689ef0510df9760ee11bab4d6b2fef3ed5c1a29ed9c3224271597a23729eb
+            env:
+              TZ: Europe/London
+            resources:
+              requests:
+                cpu: 250m
+                memory: 1G
+              limits:
+                cpu: "2"
+                memory: 2G
+          ha-mcp:
+            image:
+              repository: ghcr.io/homeassistant-ai/ha-mcp
+              # pinned: :stable + IfNotPresent ran stale node-cached copies
+              tag: 8.7.0@sha256:600677bbd7574dfb59682e40d6945f73fcc8852d3684b3671506602473942448
+            args:
+            - ha-mcp-web
+            env:
+              HOMEASSISTANT_URL: http://localhost:8123
+              HOMEASSISTANT_TOKEN:
+                valueFrom:
+                  secretKeyRef:
+                    name: ha-mcp-dev
+                    key: HOMEASSISTANT_TOKEN
+    service:
+      app:
+        controller: main
+        labels:
+          app: homeassistant-dev
+        ports:
+          http:
+            port: 8123
+          ha-mcp:
+            port: 8086
+    ingress:
+      private:
+        forceRename: homeassistant-dev-private
+        className: private-traefik
+        annotations:
+          traefik.ingress.kubernetes.io/router.tls.options: automation-ha-http1-only@kubernetescrd
+        hosts:
+        - host: &host homeassistant-dev.nashes.uk
+          paths:
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: app
+              port: http
+          - path: /mcp
+            pathType: Prefix
+            service:
+              identifier: app
+              port: ha-mcp
+        tls:
+        - hosts: [*host]
+    persistence:
+      config:
+        # ssd-tagged disks are all in DiskPressure (no new replica scheduling);
+        # dev is disposable so single-replica bulk is fine
+        forceRename: homeassistant-dev-config
+        retain: true
+        storageClass: longhorn-bulk
+        accessMode: ReadWriteOnce
+        size: 10Gi
+        advancedMounts:
+          main:
+            app:
+            - path: /config
+    networkpolicies:
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: traefik
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: private-traefik
+            ports:
+            - {protocol: TCP, port: 8123}
+            - {protocol: TCP, port: 8086}
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: mcp
+              podSelector:
+                matchLabels:
+                  app: ha-dev
+            ports:
+            - {protocol: TCP, port: 8123}
+          egress:
+          # Prod HA (hostNetwork) for the mirrored prod* entities
+          - to:
+            - ipBlock: {cidr: 172.16.0.10/32}
+            - ipBlock: {cidr: 172.16.0.12/32}
+            - ipBlock: {cidr: 172.16.0.13/32}
+            ports:
+            - {protocol: TCP, port: 8123}
+          - to:
+            - ipBlock:
+                cidr: 0.0.0.0/0
+                except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+            ports:
+            - {protocol: TCP, port: 443}
+          # mDNS and SSDP discovery. Multicast and broadcast do not leave the pod network; allowing
+          # them keeps the drop metrics clean.
+          - to:
+            - ipBlock: {cidr: 224.0.0.251/32}
+            ports:
+            - {protocol: UDP, port: 5353}
+          - to:
+            - ipBlock: {cidr: 239.255.255.250/32}
+            - ipBlock: {cidr: 255.255.255.255/32}
+            ports:
+            - {protocol: UDP, port: 1900}

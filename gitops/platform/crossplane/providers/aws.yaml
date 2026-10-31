@@ -1,0 +1,47 @@
+apiVersion: platform.nashes.uk/v1alpha1
+kind: XProviderAWS
+metadata:
+  name: aws-cognitoidp
+spec:
+  package: xpkg.upbound.io/upbound/provider-aws-cognitoidp:v2.3.0
+  roleName: crossplane-cognito
+  managedPolicyNames:
+  - AmazonCognitoPowerUser
+  poll: 30m
+  sync: 6h
+  maxReconcileRate: 1
+---
+apiVersion: platform.nashes.uk/v1alpha1
+kind: XProviderAWS
+metadata:
+  name: aws-iam
+spec:
+  package: xpkg.upbound.io/upbound/provider-aws-iam:v2.3.0
+  roleName: crossplane-iam
+  managedPolicyNames:
+  - IAMFullAccess
+  poll: 10m
+  sync: 1h
+  maxReconcileRate: 5
+---
+# S3: only the policy of the IRSA OIDC bucket (public read of the discovery documents).
+apiVersion: platform.nashes.uk/v1alpha1
+kind: XProviderAWS
+metadata:
+  name: aws-s3
+spec:
+  package: xpkg.upbound.io/upbound/provider-aws-s3:v2.3.0
+  roleName: crossplane-s3
+  policies:
+    oidc-bucket-policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {"Effect": "Allow",
+           "Action": ["s3:GetBucketPolicy", "s3:PutBucketPolicy", "s3:DeleteBucketPolicy", "s3:GetBucketLocation"],
+           "Resource": "arn:aws:s3:::23oak-k8s-oidc"}
+        ]
+      }
+  poll: 30m
+  sync: 6h
+  maxReconcileRate: 1

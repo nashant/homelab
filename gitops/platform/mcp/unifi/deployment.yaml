@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unifi
+  labels:
+    app: unifi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unifi
+  template:
+    metadata:
+      labels:
+        app: unifi
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: mcp
+        image: ghcr.io/sirkirby/unifi-network-mcp:0.24.1@sha256:4d15874fa5ec0c028bd2557d8725d22a831dadfa28d87987c49be91bb20245ee
+        ports:
+        - name: mcp
+          containerPort: 8080
+        env:
+        - name: UNIFI_HOST
+          value: unifi.unifi.svc.cluster.local # UniFi OS Server
+        - name: UNIFI_PORT
+          value: "443"
+        - name: UNIFI_VERIFY_SSL # self-signed
+          value: "false"
+        - name: UNIFI_USERNAME
+          valueFrom:
+            secretKeyRef: {name: unifi, key: username}
+        - name: UNIFI_PASSWORD
+          valueFrom:
+            secretKeyRef: {name: unifi, key: password}
+        - name: UNIFI_MCP_HTTP_ENABLED
+          value: "true"
+        - name: UNIFI_MCP_HOST
+          value: 0.0.0.0
+        - name: UNIFI_MCP_PORT
+          value: "8080"
+        - name: UNIFI_MCP_ALLOWED_HOSTS # DNS-rebinding check on the Host header
+          value: unifi.mcp.svc,unifi.mcp.svc.cluster.local,unifi.mcp.svc:8080,unifi.mcp.svc.cluster.local:8080,mcp-unifi.nashes.uk
+        # One named tool per action (no unifi_execute meta-tool), so opencode
+        # can put the mutating ones behind `ask` by name. Mutations also need
+        # the server's own preview -> confirm=true round trip.
+        - name: UNIFI_TOOL_REGISTRATION_MODE
+          value: eager
+        - name: UNIFI_META_TOOLS_ENABLED
+          value: "false"
+        - name: HOME
+          value: /tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests: {cpu: 20m, memory: 128Mi}
+          limits: {memory: 512Mi}
+        readinessProbe:
+          tcpSocket: {port: 8080}
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket: {port: 8080}
+          periodSeconds: 30
+      volumes:
+      - {name: tmp, emptyDir: {}}

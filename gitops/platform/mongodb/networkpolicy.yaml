@@ -1,0 +1,20 @@
+# Policies for mongodb; the default deny is cluster-wide (platform/cilium/default-deny.ccnp.yaml).
+# The capture showed the operator talking only to the API server; the agents in the database pods do
+# the rest.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mongodb-kubernetes-operator
+  namespace: mongodb
+spec:
+  podSelector:
+    matchLabels:
+      name: mongodb-kubernetes-operator
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}

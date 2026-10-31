@@ -1,0 +1,49 @@
+# Radar has no login of its own (auth.mode none) and shows the whole cluster, so the UI sits
+# behind oauth2-proxy. Host is radar.nashes.uk because the Cognito cookie is scoped to .nashes.uk.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: radar-private
+  namespace: radar
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: oauth2-proxy-oauth2-proxy@kubernetescrd
+spec:
+  ingressClassName: private-traefik
+  rules:
+  - host: &h radar.nashes.uk
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: radar
+            port:
+              name: http
+  tls:
+  - hosts: [*h]
+---
+# Read-only MCP for the workstation's clients, same allow-list as platform/mcp/ingress.yaml.
+# Only /mcp-readonly is routed, so this host never reaches the UI or API.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-radar
+  namespace: radar
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: mcp-workstation-only@kubernetescrd
+spec:
+  ingressClassName: private-traefik
+  rules:
+  - host: &h mcp-radar.nashes.uk
+    http:
+      paths:
+      - path: /mcp-readonly
+        pathType: Exact
+        backend:
+          service:
+            name: radar
+            port:
+              name: http
+  tls:
+  - hosts: [*h]

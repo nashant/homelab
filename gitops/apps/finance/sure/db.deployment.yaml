@@ -1,0 +1,69 @@
+# Plain PostgreSQL 16 (pinned — Sure is Rails/ActiveRecord on Postgres, and mariadb-operator
+# only does MySQL/MariaDB; no Postgres operator exists in-cluster). Scoped to this app only,
+# mirroring moneymatter-db rather than sharing an instance.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sure-db
+  namespace: finance
+  labels:
+    app: sure-db
+    part-of: sure
+spec:
+  replicas: 0   # replaced by db.cluster.yaml (CNPG); kept for rollback until the owner deletes it
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sure-db
+  template:
+    metadata:
+      labels:
+        app: sure-db
+        part-of: sure
+    spec:
+      securityContext:
+        fsGroup: 999   # postgres image's uid/gid
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: postgres
+        image: postgres:16
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: postgres
+          containerPort: 5432
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        env:
+        - name: POSTGRES_USER
+          value: sure
+        - name: POSTGRES_DB
+          value: sure_production
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: sure
+              key: db-password
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "sure", "-d", "sure_production"]
+          periodSeconds: 10
+        startupProbe:
+          exec:
+            command: ["pg_isready", "-U", "sure", "-d", "sure_production"]
+          periodSeconds: 5
+          failureThreshold: 24
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: sure-db

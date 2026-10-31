@@ -1,0 +1,10 @@
+# Guard against runaway pod creation (e.g. a Deployment whose pods keep failing
+# node admission). Was live-only since 2025-04-30; brought into git when raised for predbat. Raised to 13 for radbalance.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota
+  namespace: automation
+spec:
+  hard:
+    count/pods: "13"

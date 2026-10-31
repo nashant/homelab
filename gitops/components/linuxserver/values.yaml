@@ -1,0 +1,12 @@
+defaultPodOptions:
+  securityContext:
+    runAsNonRoot: false
+    fsGroup: 1000
+controllers:
+  main:
+    containers:
+      app:
+        env:
+          TZ: Europe/London
+          PUID: "1000"
+          PGID: "1000"

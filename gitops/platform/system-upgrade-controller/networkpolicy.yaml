@@ -1,0 +1,18 @@
+# Policies for system-upgrade; the default deny is cluster-wide
+# (platform/cilium/default-deny.ccnp.yaml). The controller and its upgrade jobs (drain, cordon) talk
+# to the API server. The k3s-upgrade image carries the k3s binary, so nothing is downloaded.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: apiserver
+  namespace: system-upgrade
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}

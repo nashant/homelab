@@ -1,0 +1,175 @@
+# Policies for monitoring; the default deny is cluster-wide
+# (platform/cilium/default-deny.ccnp.yaml). Peers come from the 2026-10-30 traffic capture,
+# Prometheus's own target list (`up`) and Grafana's datasources. Grafana's policy is in
+# grafana.networkpolicy.yaml. The node exporter uses the host network, so no policy applies to it.
+
+# Prometheus scrapes pods in every namespace on many ports. Its egress to pods is open, and the
+# policy of each target decides. Host-network targets are listed by port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  policyTypes: [Ingress, Egress]
+  ingress:
+  # StoreAPI on the Thanos sidecar
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: thanos
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: thanos
+          app.kubernetes.io/component: query
+    ports:
+    - {protocol: TCP, port: 10901}
+  # Radar, and the API server service proxy
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: radar
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: radar
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 9090}
+  egress:
+  - to:
+    - namespaceSelector: {}
+  # Nodes: API server, Home Assistant (host network), node exporter, Cilium agent and operator,
+  # Hubble, kubelet
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}
+    - {protocol: TCP, port: 8123}
+    - {protocol: TCP, port: 9100}
+    - {protocol: TCP, port: 9962}
+    - {protocol: TCP, port: 9963}
+    - {protocol: TCP, port: 9965}
+    - {protocol: TCP, port: 10250}
+  # OPNsense node exporter (opnsense/node.scrapeconfig.yaml)
+  - to:
+    - ipBlock: {cidr: 172.16.0.1/32}
+    ports:
+    - {protocol: TCP, port: 9100}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alertmanager
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - {protocol: TCP, port: 9093}
+    - {protocol: TCP, port: 8080}
+  # Grafana's Alertmanager datasource, and the API server service proxy
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: grafana
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 9093}
+  egress:
+  # Notification receivers (Pushover)
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    ports:
+    - {protocol: TCP, port: 443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kube-state-metrics
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kube-state-metrics
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - {protocol: TCP, port: 8080}
+    - {protocol: TCP, port: 8081}
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}
+---
+# The API servers call the operator's admission webhooks (certificates from cert-manager).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus-operator
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kube-prometheus-stack-prometheus-operator
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 10250}
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}
+---
+# Reads the Coral TPUs through /sys; no egress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: coral-apex-exporter
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: coral-apex-exporter
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - {protocol: TCP, port: 9101}

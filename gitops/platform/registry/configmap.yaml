@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-config
+  namespace: registry
+  labels:
+    app: registry
+data:
+  config.yml: |
+    version: 0.1
+    log:
+      level: info
+      fields:
+        service: registry
+    storage:
+      s3:
+        # In-cluster SeaweedFS S3 gateway, same client shape as loki/tempo/thanos:
+        # plain http, path-style, region is a required-but-meaningless value.
+        region: us-east-1
+        regionendpoint: http://seaweedfs-s3.seaweedfs:8333
+        forcepathstyle: true
+        secure: false
+        bucket: registry
+        # accesskey/secretkey come from the registry-s3 Secret via
+        # REGISTRY_STORAGE_S3_ACCESSKEY / REGISTRY_STORAGE_S3_SECRETKEY.
+      # Without this the S3 driver answers blob GETs with a 307 to a presigned URL on
+      # seaweedfs-s3.seaweedfs:8333, which nothing outside the cluster can reach.
+      redirect:
+        disable: true
+      delete:
+        enabled: true
+      cache:
+        blobdescriptor: inmemory
+    http:
+      addr: :5000
+      # secret: comes from the registry-s3 Secret as REGISTRY_HTTP_SECRET; it must be identical
+      # on every replica (see registry-s3.es.yaml).
+      # Behind traefik: return relative Location headers so clients keep talking to
+      # registry.nashes.uk instead of whatever host the pod thinks it is.
+      relativeurls: true
+      headers:
+        X-Content-Type-Options: [nosniff]
+      debug:
+        addr: :5001
+        prometheus:
+          enabled: true
+          path: /metrics
+    health:
+      storagedriver:
+        enabled: true
+        interval: 10s
+        threshold: 3

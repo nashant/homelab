@@ -1,0 +1,107 @@
+# Policies for loki; the default deny is cluster-wide (platform/cilium/default-deny.ccnp.yaml).
+# Peers come from the 2026-10-30 traffic capture plus Grafana's datasources. Usage reporting is off
+# (Loki values, Alloy enableReporting), so nothing needs the internet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: loki
+  namespace: loki
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+  policyTypes: [Ingress, Egress]
+  ingress:
+  # Pushes from Alloy, queries from Grafana, scrapes from Prometheus
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: alloy
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: grafana
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - {protocol: TCP, port: 3100}
+  # API server service proxy (the API servers run on all three nodes)
+  - from:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 3100}
+  # gRPC and memberlist between Loki pods
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: loki
+    ports:
+    - {protocol: TCP, port: 9095}
+    - {protocol: TCP, port: 7946}
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: seaweedfs
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/component: s3
+    ports:
+    - {protocol: TCP, port: 8333}
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: loki
+    ports:
+    - {protocol: TCP, port: 9095}
+    - {protocol: TCP, port: 7946}
+  # The rules sidecar watches ConfigMaps through the API server
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: alloy
+  namespace: loki
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alloy
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - {protocol: TCP, port: 12345}
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: loki
+    ports:
+    - {protocol: TCP, port: 3100}
+  # Pod discovery through the API server; logs are read from the node's /var/log/pods
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}

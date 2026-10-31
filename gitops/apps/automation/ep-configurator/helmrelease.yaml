@@ -1,0 +1,83 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ep-configurator
+  namespace: automation
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: apps-high
+      # live runs on the host network
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        # image runs as root (no USER)
+        runAsNonRoot: false
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            image:
+              repository: everythingsmarthome/everything-presence-mmwave-configurator
+              tag: 2.2.5@sha256:c724233656a40394b72b234544c7e0dd518cb5655bd1e965852cb10652e12b70
+            env:
+              HA_URL: http://homeassistant.automation.svc.cluster.local:8123
+              HA_TOKEN:
+                valueFrom:
+                  secretKeyRef:
+                    name: home-assistant-tokens
+                    key: ep-configurator
+              HA_BASE_URL: http://homeassistant.automation.svc.cluster.local:8123
+              HA_LONG_LIVED_TOKEN:
+                valueFrom:
+                  secretKeyRef:
+                    name: home-assistant-tokens
+                    key: ep-configurator
+            resources:
+              requests:
+                cpu: 250m
+                memory: 500M
+              limits:
+                cpu: "1"
+                memory: 2G
+    service:
+      app:
+        controller: main
+        ports:
+          http:
+            port: 42069
+    ingress:
+      public:
+        className: public-traefik
+        annotations:
+          traefik.ingress.kubernetes.io/router.middlewares: oauth2-proxy-oauth2-proxy@kubernetescrd
+          external-dns.alpha.kubernetes.io/target: home.nashes.uk
+        hosts:
+        - host: &nashes ep-configurator.nashes.uk
+          paths: &paths
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: app
+              port: http
+        tls:
+        - hosts: [*nashes]
+      private:
+        className: private-traefik
+        hosts:
+        - host: &oak ep-configurator.23oak.uk
+          paths: *paths
+        - host: *nashes
+          paths: *paths
+        tls:
+        - hosts: [*oak, *nashes]
+    persistence:
+      data:
+        forceRename: ep-configurator-data
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 5Gi
+        globalMounts:
+        - path: /config

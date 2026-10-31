@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- namespace.yaml
+- runtimeclass.yaml
+- rbac.yaml
+- admission-policy.yaml
+- opencode-es.yaml
+- pvc.yaml
+- authorized-keys.yaml
+- service.yaml
+- ingress.yaml
+- tcproute.yaml
+- proxy-env.yaml
+- deployment.yaml
+- netpolicy.yaml
+# image/ is the container build context (Dockerfile + config + plugin), not
+# kustomize resources. See README.md for the full run book.

@@ -1,0 +1,110 @@
+# OPNsense API exporter (https://github.com/AthennaMind/opnsense-exporter): gateways, pf,
+# interfaces, services, OpenVPN, Unbound, cron, temperature. Host metrics come from the
+# firewall's own node_exporter plugin instead (node.scrapeconfig.yaml).
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: opnsense-exporter
+  namespace: monitoring
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: platform-high
+      securityContext:
+        # image USER is root
+        runAsUser: 65534
+        runAsGroup: 65534
+      # The web GUI certificate names only opnsense.home, and cluster DNS resolves that to
+      # the router's VPN address, where the GUI doesn't listen. Pin it to the LAN address.
+      hostAliases:
+      - ip: 172.16.0.1
+        hostnames: [opnsense.home]
+    controllers:
+      main:
+        containers:
+          app:
+            image:
+              repository: ghcr.io/athennamind/opnsense-exporter
+              tag: 0.0.19@sha256:e1f79c770dba7d3165e12836e4b6f849be93a8b2a25116b7ea11c5da8c3ad2db
+            env:
+              OPNSENSE_EXPORTER_OPS_PROTOCOL: https
+              OPNSENSE_EXPORTER_OPS_API: opnsense.home
+              # trust exactly the firewall's self-signed web GUI certificate
+              SSL_CERT_FILE: /etc/opnsense/webgui.crt
+              OPNSENSE_EXPORTER_INSTANCE_LABEL: opnsense
+              OPS_API_KEY_FILE: /secrets/api-key
+              OPS_API_SECRET_FILE: /secrets/api-secret
+              # not configured on this firewall (ISC DHCP, no IPsec/WireGuard/CARP)
+              OPNSENSE_EXPORTER_DISABLE_KEADHCPV4: "true"
+              OPNSENSE_EXPORTER_DISABLE_KEADHCPV6: "true"
+              OPNSENSE_EXPORTER_DISABLE_IPSEC: "true"
+              OPNSENSE_EXPORTER_DISABLE_WIREGUARD: "true"
+              OPNSENSE_EXPORTER_DISABLE_CARP: "true"
+            probes:
+              liveness: &probe
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /
+                    port: 8080
+                  periodSeconds: 30
+              readiness: *probe
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: [ALL]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 128Mi
+    persistence:
+      creds:
+        type: secret
+        name: opnsense-exporter
+        globalMounts:
+        - path: /secrets
+          readOnly: true
+      webgui-cert:
+        type: configMap
+        name: opnsense-webgui-cert
+        globalMounts:
+        - path: /etc/opnsense
+          readOnly: true
+    service:
+      app:
+        controller: main
+        ports:
+          metrics:
+            port: 8080
+    serviceMonitor:
+      app:
+        service:
+          identifier: app
+        endpoints:
+        - port: metrics
+          path: /metrics
+          # every scrape is a round of OPNsense API calls
+          interval: 60s
+          scrapeTimeout: 30s
+    networkpolicies:
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: prometheus
+            ports:
+            - {protocol: TCP, port: 8080}
+          egress:
+          - to:
+            - ipBlock:
+                cidr: 172.16.0.1/32
+            ports:
+            - {protocol: TCP, port: 443}

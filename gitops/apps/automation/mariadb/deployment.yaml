@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb
+  namespace: automation
+  labels:
+    app: mariadb
+spec:
+  # Retired: data moved to the homeassistant-db MariaDB (mariadb.yaml). Kept at 0
+  # with its mariadb-lib PVC for rollback until the owner deletes both.
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+      annotations:
+        fluentbit.io/parser: mariadb
+    spec:
+      priorityClassName: apps-critical
+      terminationGracePeriodSeconds: 300
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: "OnRootMismatch"
+      containers:
+      - name: mariadb
+        image: mariadb:12.3.3
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3306
+          name: mariadb
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1G
+          limits:
+            cpu: 1000m
+            memory: 2G
+#        readinessProbe:
+#          httpGet:
+#            path: /
+#            port: 8989
+#          initialDelaySeconds: 20
+#          periodSeconds: 10
+#        livenessProbe:
+#          exec:
+#            command:
+#            - ls
+#            - /home25/nashant/complete/tv/test
+#          initialDelaySeconds: 30
+#          periodSeconds: 10
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mariadb
+              key: root-password
+        # Entrypoint runs `mariadb-upgrade --upgrade-system-tables` on the
+        # temporary server before opening port 3306, so system tables are
+        # migrated before clients connect. Note it skips the user-table
+        # collation check (Phase 6) - run `mariadb-upgrade --force` by hand
+        # after a major version bump.
+        - name: MARIADB_AUTO_UPGRADE
+          value: "1"
+        volumeMounts:
+        - name: lib
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: lib
+        persistentVolumeClaim:
+          claimName: mariadb-lib

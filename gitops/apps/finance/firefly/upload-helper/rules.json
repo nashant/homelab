@@ -1,0 +1,17 @@
+{
+  "banks": {
+    "nationwide": {
+      "label": "Nationwide",
+      "skip_lines": 4
+    },
+    "amex": {
+      "label": "American Express",
+      "skip_lines": 0
+    },
+    "other": {
+      "label": "Other (no preamble)",
+      "skip_lines": 0
+    }
+  },
+  "default": "nationwide"
+}

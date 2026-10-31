@@ -1,0 +1,32 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vpn-pf
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vpn-pf
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vpn-pf
+subjects:
+- kind: ServiceAccount
+  name: vpn-pf
+  namespace: vpn
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vpn-pf
+  namespace: vpn

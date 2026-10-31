@@ -1,0 +1,12 @@
+# OPNsense's own node_exporter plugin (Services > Node Exporter), FreeBSD host metrics.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: opnsense-node
+  namespace: monitoring
+spec:
+  jobName: opnsense-node
+  staticConfigs:
+  - targets: [172.16.0.1:9100]
+    labels:
+      opnsense_instance: opnsense

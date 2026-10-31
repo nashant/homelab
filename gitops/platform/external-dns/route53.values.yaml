@@ -1,0 +1,14 @@
+priorityClassName: platform-high
+extraArgs:
+- --ingress-class=public-traefik
+policy: sync
+txtOwnerId: /hostedzone/Z0394221315X4TFZ9379C
+txtPrefix: txt.
+sources:
+- ingress
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::079357235350:role/external-dns
+env:
+- name: AWS_DEFAULT_REGION
+  value: eu-west-2

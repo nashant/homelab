@@ -1,0 +1,66 @@
+# Static helper page at /upload/ on the importer's host (routed in importer.ingress.yaml), mounted
+# from the firefly-upload-helper ConfigMap: strips the Nationwide CSV preamble in the browser. Was a
+# sidecar of the importer pod; the official importer chart cannot add containers or ports, so it
+# runs on its own.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firefly-upload-helper
+  namespace: finance
+  labels:
+    app: firefly-upload-helper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: firefly-upload-helper
+  template:
+    metadata:
+      labels:
+        app: firefly-upload-helper
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: upload-helper
+        image: busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+        command: ["httpd", "-f", "-v", "-p", "8081", "-h", "/www"]
+        ports:
+        - name: upload
+          containerPort: 8081
+        resources:
+          requests:
+            cpu: 5m
+            memory: 8Mi
+          limits:
+            cpu: 50m
+            memory: 32Mi
+        readinessProbe:
+          httpGet:
+            path: /upload/rules.json
+            port: upload
+          periodSeconds: 10
+        volumeMounts:
+        - name: upload-helper
+          mountPath: /www/upload
+          readOnly: true
+      volumes:
+      - name: upload-helper
+        configMap:
+          name: firefly-upload-helper
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: firefly-upload-helper
+  namespace: finance
+  labels:
+    app: firefly-upload-helper
+spec:
+  type: ClusterIP
+  ports:
+  - name: upload
+    port: 8081
+    targetPort: upload
+    protocol: TCP
+  selector:
+    app: firefly-upload-helper

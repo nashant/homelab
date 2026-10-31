@@ -1,0 +1,19 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: homeassistant-token
+  namespace: monitoring
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: homeassistant-token
+    creationPolicy: Owner
+  # Consumed by the homeassistant ServiceMonitor's bearerTokenSecret
+  # (key MUST be `token`) to scrape HA's /api/prometheus endpoint.
+  data:
+  - secretKey: token
+    remoteRef:
+      key: /k8s/prometheus/homeassistant-token

@@ -1,0 +1,23 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: pushover-credentials
+  namespace: monitoring
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: pushover-credentials
+    creationPolicy: Owner
+  # alertmanager mounts this Secret as files at
+  # /etc/alertmanager/secrets/pushover-credentials/{token,user_key},
+  # so the keys MUST be `token` and `user_key`.
+  data:
+  - secretKey: token
+    remoteRef:
+      key: /k8s/monitoring/pushover-token
+  - secretKey: user_key
+    remoteRef:
+      key: /k8s/monitoring/pushover-user-key

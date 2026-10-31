@@ -1,0 +1,10 @@
+# Repo URL from the chart README (github.com/cloudnative-pg/charts, charts/cloudnative-pg/README.md).
+# Kept beside the operator rather than in platform/helmrepos: nothing else uses it.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: cnpg
+  namespace: flux-system
+spec:
+  url: https://cloudnative-pg.github.io/charts
+  interval: 10m

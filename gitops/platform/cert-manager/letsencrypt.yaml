@@ -1,0 +1,78 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+ labels:
+   name: letsencrypt-prod
+ name: letsencrypt-prod
+spec:
+ acme:
+   email: nash.ant@gmail.com
+   server: https://acme-v02.api.letsencrypt.org/directory
+   privateKeySecretRef:
+     name: letsencrypt-prod
+   solvers:
+   # One solver per zone: hostedZoneID applies to every challenge a solver
+   # handles, so a single solver covering all three zones would write every
+   # _acme-challenge TXT into one zone (only one would validate).
+   - selector:
+       dnsZones:
+       - nashes.uk
+     dns01:
+       cnameStrategy: Follow
+       route53:
+         region: eu-west-1
+         hostedZoneID: Z0394221315X4TFZ9379C
+   - selector:
+       dnsZones:
+       - 23oak.uk
+     dns01:
+       cnameStrategy: Follow
+       route53:
+         region: eu-west-1
+         hostedZoneID: Z00208643MDVX02TG9N7X
+   - selector:
+       dnsZones:
+       - anthonynash.com
+     dns01:
+       cnameStrategy: Follow
+       route53:
+         region: eu-west-1
+         hostedZoneID: Z0824775IQEX8J6LW8YI
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+ labels:
+   name: letsencrypt-staging
+ name: letsencrypt-staging
+spec:
+ acme:
+   email: nash.ant@gmail.com
+   server: https://acme-staging-v02.api.letsencrypt.org/directory
+   privateKeySecretRef:
+     name: letsencrypt-staging
+   solvers:
+   - selector:
+       dnsZones:
+       - nashes.uk
+     dns01:
+       cnameStrategy: Follow
+       route53:
+         region: eu-west-1
+         hostedZoneID: Z0394221315X4TFZ9379C
+   - selector:
+       dnsZones:
+       - 23oak.uk
+     dns01:
+       cnameStrategy: Follow
+       route53:
+         region: eu-west-1
+         hostedZoneID: Z00208643MDVX02TG9N7X
+   - selector:
+       dnsZones:
+       - anthonynash.com
+     dns01:
+       cnameStrategy: Follow
+       route53:
+         region: eu-west-1
+         hostedZoneID: Z0824775IQEX8J6LW8YI

@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: unifi
+resources:
+- namespace.yaml
+- service.yaml
+- mongodb.serviceaccount.yaml
+- mongodb.rbac.yaml
+- ingress.yaml
+- serverstransport.yaml
+# UniFi OS Server MongoDB, its user secret and network policy.
+- unifi-os.database.yaml
+- unifi-os.mongodb-es.yaml
+- unifi-os.networkpolicy.yaml
+# Deployment, unifi-os-ui Service and unifi-os-private Ingress
+- helmrelease.yaml
+components:
+- ../../../components/app-template-defaults

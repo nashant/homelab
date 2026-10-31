@@ -1,0 +1,15 @@
+# Web access goes through platform/egress-proxy (logged). Model providers,
+# GitHub, npm and Exa bypass it on the direct allow-list in netpolicy.yaml, as
+# does anything in-cluster or on the LAN (which the proxy refuses anyway).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: proxy-env
+  namespace: opencode
+data:
+  HTTPS_PROXY: http://egress-proxy.egress-proxy.svc:3128
+  HTTP_PROXY: http://egress-proxy.egress-proxy.svc:3128
+  https_proxy: http://egress-proxy.egress-proxy.svc:3128
+  http_proxy: http://egress-proxy.egress-proxy.svc:3128
+  NO_PROXY: &noproxy localhost,127.0.0.1,.svc,.cluster.local,.home,.nashes.uk,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,api.z.ai,openrouter.ai,github.com,api.github.com,codeload.github.com,objects.githubusercontent.com,registry.npmjs.org,mcp.exa.ai
+  no_proxy: *noproxy

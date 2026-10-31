@@ -1,0 +1,21 @@
+# trufflehog secret scanning: pre-commit scans staged changes, pre-push scans full history.
+# Install both stages once per clone: pre-commit install --hook-type pre-commit --hook-type pre-push
+# No --results filter is intentional: a fresh key/token is "unverified", so verified-only would
+# miss it. --trust-local-git-config makes pre-commit scan the working tree (sees staged changes).
+repos:
+  - repo: local
+    hooks:
+      - id: trufflehog-staged
+        name: trufflehog (staged changes)
+        language: system
+        entry: trufflehog git file://. --since-commit HEAD --fail --trust-local-git-config
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+      - id: trufflehog-full
+        name: trufflehog (full history)
+        language: system
+        entry: trufflehog git file://. --fail --trust-local-git-config
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

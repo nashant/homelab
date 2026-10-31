@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: automation
+resources:
+- ./helmrelease.yaml
+- ./frigate-es.yaml
+- ./servicemonitor.yaml
+components:
+- ../../../components/app-template-defaults
+
+# Grafana's dashboard sidecar loads any ConfigMap labelled grafana_dashboard=1.
+configMapGenerator:
+- name: frigate-grafana-dashboard
+  files:
+  - frigate-coral.json=grafana-dashboard.json
+  options:
+    disableNameSuffixHash: true
+    labels:
+      grafana_dashboard: "1"
+
+# NOTE: Frigate's config.yml is intentionally NOT managed by GitOps.
+# The live config lives in the frigate-config PVC (/config), edited via the
+# Frigate UI/API. Pull it from the API (GET /api/config), not from this repo.
+# The `frigate` secret (rtsp + plus keys) is now synced from SSM by ESO
+# (frigate-es.yaml), no longer generated from rtsp.env/plus.env.

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firefly import helper</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { max-width: 56rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.4; }
+  h1 { font-size: 1.4rem; }
+  #drop { border: 2px dashed #888; border-radius: .5rem; padding: 2rem; text-align: center; cursor: pointer; }
+  #drop.over { border-color: #2a7; background: rgba(40,170,120,.08); }
+  label { display: inline-block; margin: .6rem 1rem .6rem 0; }
+  input[type=number] { width: 4rem; }
+  pre { background: rgba(127,127,127,.12); padding: .75rem; overflow-x: auto; font-size: .85rem; }
+  .skip { opacity: .45; text-decoration: line-through; }
+  .hdr { font-weight: bold; }
+  button { padding: .5rem 1rem; }
+  #msg { white-space: pre-wrap; } #msg.err { color: #c33; }
+  .muted { opacity: .7; font-size: .9rem; }
+</style>
+</head>
+<body>
+<h1>Firefly import helper</h1>
+<p class="muted">Nationwide's CSV export starts with four lines of account summary that the
+<a href="/">data importer</a> cannot skip. Drop the export here; the preamble is removed in your browser and you download
+the cleaned file, then upload it in the importer together with the saved configuration
+(<code>import-configs/nationwide.json</code> in the repo). Payees, categories and transfers are Firefly rules.</p>
+
+<div id="drop" tabindex="0">Drop a CSV here or click to choose
+  <input id="file" type="file" accept=".csv,text/csv" hidden>
+</div>
+
+<div id="opts" hidden>
+  <label>Bank <select id="bank"></select></label>
+  <label>Skip first <input id="skip" type="number" min="0" max="50" value="0"> lines</label>
+  <p class="muted" id="info"></p>
+  <pre id="preview"></pre>
+  <button id="download" type="button">Download cleaned file</button>
+</div>
+<p id="msg"></p>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const drop = $('drop'), fileIn = $('file'), bankSel = $('bank'), skipIn = $('skip');
+  const preview = $('preview'), info = $('info'), msg = $('msg'), opts = $('opts');
+  let rules = { banks: {}, default: 'other' };
+  let rawText = '', origName = 'import.csv';
+
+  const say = (text, err = false) => { msg.textContent = text; msg.className = err ? 'err' : ''; };
+
+  fetch('rules.json', { cache: 'no-store' }).then(r => r.json()).then(r => {
+    rules = r;
+    for (const [key, b] of Object.entries(rules.banks)) {
+      const o = document.createElement('option'); o.value = key; o.textContent = b.label; bankSel.appendChild(o);
+    }
+    bankSel.value = rules.default in rules.banks ? rules.default : bankSel.options[0].value;
+    skipIn.value = rules.banks[bankSel.value].skip_lines;
+  }).catch(() => say('Could not load rules.json', true));
+
+  bankSel.addEventListener('change', () => { skipIn.value = rules.banks[bankSel.value].skip_lines; renderPreview(); });
+  skipIn.addEventListener('input', renderPreview);
+
+  drop.addEventListener('click', () => fileIn.click());
+  drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileIn.click(); });
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => { if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+  fileIn.addEventListener('change', () => { if (fileIn.files[0]) load(fileIn.files[0]); });
+
+  function decode(buf) {
+    // Bank exports are usually UTF-8 (sometimes with a BOM); older UK exports are Windows-1252.
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(buf).replace(/^﻿/, ''); }
+    catch { return new TextDecoder('windows-1252').decode(buf); }
+  }
+
+  async function load(file) {
+    if (!/\.csv$/i.test(file.name)) { say('Only .csv files are supported.', true); return; }
+    if (file.size > 20 * 1024 * 1024) { say('File larger than 20 MB; refusing.', true); return; }
+    origName = file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+    rawText = decode(await file.arrayBuffer());
+    say(''); opts.hidden = false; renderPreview();
+  }
+
+  function splitLines(text) {
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
+    const lines = text.split(eol);
+    if (lines.length && lines[lines.length - 1] === '') lines.pop();
+    return { lines, eol };
+  }
+
+  function cleaned() {
+    const skip = Math.max(0, parseInt(skipIn.value, 10) || 0);
+    const { lines, eol } = splitLines(rawText);
+    return lines.slice(skip).join(eol) + eol;
+  }
+
+  function renderPreview() {
+    if (!rawText) return;
+    const skip = Math.max(0, parseInt(skipIn.value, 10) || 0);
+    const { lines } = splitLines(rawText);
+    preview.textContent = '';
+    lines.slice(0, Math.max(skip + 4, 8)).forEach((line, i) => {
+      const span = document.createElement('span');
+      span.className = i < skip ? 'skip' : (i === skip ? 'hdr' : '');
+      span.textContent = String(i + 1).padStart(3) + '  ' + line + '\n';
+      preview.appendChild(span);
+    });
+    info.textContent = `${origName}: ${lines.length} lines; line ${skip + 1} becomes the header.`;
+  }
+
+  $('download').addEventListener('click', () => {
+    const url = URL.createObjectURL(new Blob([cleaned()], { type: 'text/csv' }));
+    const a = document.createElement('a'); a.href = url; a.download = origName; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  });
+})();
+</script>
+</body>
+</html>

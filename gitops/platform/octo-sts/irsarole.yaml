@@ -1,0 +1,29 @@
+# kms:Sign on the GitHub App key only. The key is matched by alias so the
+# key ID (created out of band, see kustomization.yaml) never lands in git.
+apiVersion: platform.nashes.uk/v1alpha1
+kind: IRSARole
+metadata:
+  name: octo-sts
+  namespace: octo-sts
+spec:
+  roleName: octo-sts
+  oidcProvider: 23oak-k8s-oidc.s3.eu-west-2.amazonaws.com
+  serviceAccounts:
+  - octo-sts
+  policies:
+    kms-sign: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": "kms:Sign",
+            "Resource": "arn:aws:kms:eu-west-2:079357235350:key/*",
+            "Condition": {
+              "ForAnyValue:StringEquals": {
+                "kms:ResourceAliases": "alias/octo-sts-github-app"
+              }
+            }
+          }
+        ]
+      }

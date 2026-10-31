@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+- namespace.yaml
+- helmrelease.yaml
+- grafana.ingress.yaml
+- grafana.networkpolicy.yaml
+- networkpolicy.yaml
+- rules
+- pushover-es.yaml
+- coral-apex-exporter.yaml
+- opnsense
+
+# Secrets are now synced from SSM by ESO, no longer generated here:
+# - pushover-credentials (keys token, user_key) <- pushover-es.yaml. Delivery
+#   is live once the real values are seeded at /k8s/monitoring/pushover-*.
+# - thanos-objstore (key objstore.yml) <- ClusterExternalSecret in
+#   clusters/prod/platform/eso/thanos-objstore.ces.yaml (targets this namespace
+#   and the thanos namespace).

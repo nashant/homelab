@@ -1,0 +1,271 @@
+# MoneyMatter (github.com/letehaha/budget-tracker, dev branch; env per self-hosting/docker-compose.yml).
+# Postgres is the CNPG cluster in db.cluster.yaml.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: moneymatter
+  namespace: finance
+spec:
+  values:
+    # Controller-level pod securityContext below adds to the component defaults instead of
+    # replacing them.
+    defaultPodOptionsStrategy: merge
+    controllers:
+      backend:
+        strategy: Recreate
+        pod:
+          securityContext:
+            # image USER is the name "nodejs"; runAsNonRoot needs the uid
+            runAsUser: 1001
+            runAsGroup: 1001
+        containers:
+          app:
+            image:
+              repository: docker.io/letehaha/budget-tracker-be
+              # upstream only publishes sha-<commit> tags; pinned by digest as before
+              digest: sha256:025b510fa45f8dadb263325a62158c4c5d06843228587ba48d6aa6b2c0c67c59
+            env:
+              NODE_ENV: production
+              IS_SELF_HOST: "true"
+              SYSTEM_DEMO_DISABLED: "true"
+              SYSTEM_MAX_SIGNUPS_ALLOWED: "1"
+              TZ: Europe/London
+              APPLICATION_HOST: 0.0.0.0
+              APPLICATION_PORT: "8081"
+              BETTER_AUTH_URL: https://moneymatter.nashes.uk
+              AUTH_ORIGIN: https://moneymatter.nashes.uk
+              ALLOWED_ORIGINS: https://moneymatter.nashes.uk
+              APPLICATION_DB_HOST: moneymatter-pg-rw
+              APPLICATION_DB_PORT: "5432"
+              APPLICATION_DB_USERNAME: moneymatter
+              APPLICATION_DB_DATABASE: moneymatter
+              APPLICATION_DB_DIALECT: postgres
+              APPLICATION_DB_PASSWORD:
+                valueFrom:
+                  secretKeyRef: {name: moneymatter-pg-app, key: password}
+              APPLICATION_REDIS_HOST: moneymatter-redis
+              # moneymatter-secrets is created by hand (see kustomization.yaml). AUTH_SECRET also
+              # encrypts the better-auth JWKS private key: never rotate it alone.
+              APPLICATION_JWT_SECRET:
+                valueFrom:
+                  secretKeyRef: {name: moneymatter-secrets, key: JWT_SECRET}
+              APP_SESSION_ID_SECRET:
+                valueFrom:
+                  secretKeyRef: {name: moneymatter-secrets, key: SESSION_SECRET}
+              BETTER_AUTH_SECRET:
+                valueFrom:
+                  secretKeyRef: {name: moneymatter-secrets, key: AUTH_SECRET}
+            probes:
+              # Runs DB migrations on boot before serving — /health stays red for the first
+              # 30-60s on a cold start (self-hosting/docs/setup-guide.md).
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health
+                    port: 8081
+                  periodSeconds: 5
+                  failureThreshold: 36
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health
+                    port: 8081
+                  periodSeconds: 10
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                cpu: "1"
+                memory: 1Gi
+      frontend:
+        strategy: Recreate
+        pod:
+          securityContext:
+            # image USER is the name "nginx"
+            runAsUser: 101
+            runAsGroup: 101
+        containers:
+          app:
+            image:
+              repository: docker.io/letehaha/budget-tracker-fe
+              # upstream only publishes sha-<commit> tags; pinned by digest as before
+              digest: sha256:4e59662cd67e01f5ecc4ba0ff5fb2cb801963b90e2d97b8ce0864a6c60f2f826
+            env:
+              IS_SELF_HOST: "true"
+              # empty API_HTTP selects same-origin /api/v1 mode (self-hosting/frontend/docker-entrypoint.sh)
+              BACKEND_URL: http://moneymatter-backend:8081
+              API_VER: /api/v1
+            probes:
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /
+                    port: 80
+                  periodSeconds: 5
+                  failureThreshold: 24
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /
+                    port: 80
+                  periodSeconds: 10
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 500m
+                memory: 256Mi
+      redis:
+        strategy: Recreate
+        pod:
+          securityContext:
+            # what the redis entrypoint drops to (gosu redis) when started as root
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+        containers:
+          app:
+            image:
+              repository: docker.io/library/redis
+              tag: 7.4.11@sha256:4fa24486b8bcca8eec45ee0eb166edc674795e53a2b53d1a9ef263eecebaac85
+            probes:
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  exec:
+                    command: ["redis-cli", "ping"]
+                  periodSeconds: 5
+                  failureThreshold: 12
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  exec:
+                    command: ["redis-cli", "ping"]
+                  periodSeconds: 10
+            resources:
+              requests:
+                cpu: 50m
+                memory: 64Mi
+              limits:
+                cpu: 500m
+                memory: 256Mi
+    service:
+      backend:
+        controller: backend
+        ports:
+          http:
+            port: 8081
+      frontend:
+        controller: frontend
+        ports:
+          http:
+            port: 80
+      redis:
+        controller: redis
+        ports:
+          redis:
+            port: 6379
+    ingress:
+      app:
+        className: private-traefik
+        hosts:
+        - host: &host moneymatter.nashes.uk
+          paths:
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: frontend
+              port: http
+        tls:
+        - hosts: [*host]
+    persistence:
+      redis:
+        forceRename: moneymatter-redis
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 1Gi
+        advancedMounts:
+          redis:
+            app:
+            - path: /data
+    networkpolicies:
+      frontend:
+        controller: frontend
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: traefik
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: private-traefik
+            ports:
+            - {protocol: TCP, port: 80}
+          egress:
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: moneymatter
+                  app.kubernetes.io/controller: backend
+            ports:
+            - {protocol: TCP, port: 8081}
+      backend:
+        controller: backend
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: moneymatter
+                  app.kubernetes.io/controller: frontend
+            ports:
+            - {protocol: TCP, port: 8081}
+          egress:
+          - to:
+            - podSelector:
+                matchLabels:
+                  cnpg.io/cluster: moneymatter-pg
+            ports:
+            - {protocol: TCP, port: 5432}
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: moneymatter
+                  app.kubernetes.io/controller: redis
+            ports:
+            - {protocol: TCP, port: 6379}
+          # scheduled currency-rate and crypto-price syncs
+          - to:
+            - ipBlock:
+                cidr: 0.0.0.0/0
+                except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+            ports:
+            - {protocol: TCP, port: 443}
+      redis:
+        controller: redis
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: moneymatter
+                  app.kubernetes.io/controller: backend
+            ports:
+            - {protocol: TCP, port: 6379}

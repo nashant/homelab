@@ -1,0 +1,84 @@
+# Lunch Flow -> Actual Budget. No env-var config: config.json and the API's "./actual-data" are
+# both cwd-relative, hence the read-only Secret is copied into a writable workdir, not mounted as
+# cwd. `import` never calls saveConfig(), so nothing persists between runs.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: actual-flow
+  namespace: finance
+  labels:
+    app: actual-flow
+spec:
+  # Lunch Flow polls the banks overnight; 06:00 gives it time to land before we pull.
+  # Deliberately clear of firefly-cron at 03:00.
+  schedule: "0 6 * * *"
+  timeZone: Europe/London
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: actual-flow
+        spec:
+          restartPolicy: Never
+          securityContext:
+            # node:*-bookworm-slim ships user `node` as 1000:1000. fsGroup makes the emptyDir
+            # group-writable so the non-root user can write config.json, ./actual-data and the
+            # npm cache into it.
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+          containers:
+            - name: actual-flow
+              # Debian rather than Alpine: @actual-app/api pulls better-sqlite3, whose prebuilt
+              # native bindings are glibc. Alpine/musl would force a source build.
+              image: node:22-bookworm-slim
+              imagePullPolicy: IfNotPresent
+              workingDir: /work
+              env:
+                # Suppresses @actual-app/api's debug chatter (README: ACTUAL_BUDGET_VERBOSE).
+                - name: ACTUAL_BUDGET_VERBOSE
+                  value: "0"
+                - name: TZ
+                  value: Europe/London
+                # npx wants a writable HOME and cache; /root is not ours as uid 1000.
+                - name: HOME
+                  value: /work
+                - name: npm_config_cache
+                  value: /work/.npm
+              command:
+                - sh
+                - -ec
+                - |
+                  cp /config/config.json /work/config.json
+                  exec npx -y @lunchflow/actual-flow@0.0.22 import
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              volumeMounts:
+                - name: config
+                  mountPath: /config
+                  readOnly: true
+                - name: work
+                  mountPath: /work
+          volumes:
+            - name: config
+              secret:
+                # Holds the complete config.json: Lunch Flow apiKey, Actual password and the
+                # accountMappings. actual-flow reads no other source.
+                secretName: actualbudget-lunchflow-config
+                items:
+                  - key: config.json
+                    path: config.json
+            - name: work
+              emptyDir: {}
+  suspend: true

@@ -1,0 +1,29 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: secrets-store-csi-driver
+  namespace: kube-system
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: secrets-store-csi-driver
+      version: 1.6.0
+      sourceRef:
+        kind: HelmRepository
+        name: secrets-store-csi-driver
+        namespace: flux-system
+      interval: 1m
+  values:
+    # Side-trial: keep the file-mount (tmpfs) behaviour — do NOT mirror secrets
+    # into native k8s Secret objects, so the etcd-free model is observable.
+    syncSecret:
+      enabled: false
+    # Auto-rotation is alpha; leave it off for the trial.
+    enableSecretRotation: false
+    # Required for the AWS provider's IRSA flow: kubelet projects a bound
+    # ServiceAccount token (audience sts.amazonaws.com) into the driver so it
+    # can call AssumeRoleWithWebIdentity. Without this the mount fails with
+    # "serviceAccount.tokens not provided - ensure tokenRequests is configured".
+    tokenRequests:
+    - audience: sts.amazonaws.com

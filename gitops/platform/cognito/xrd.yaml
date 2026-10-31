@@ -1,0 +1,77 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xcognitooauths.auth.nashes.uk
+spec:
+  group: auth.nashes.uk
+  names:
+    kind: XCognitoOAuth
+    plural: xcognitooauths
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              region:
+                type: string
+                default: eu-west-2
+                description: AWS region for Cognito resources
+              userPoolName:
+                type: string
+                description: Name for the Cognito User Pool
+              domain:
+                type: string
+                description: Cognito domain prefix (e.g., nashes-auth)
+              ingressLabelSelector:
+                type: string
+                default: "oauth2.nashes.uk/enabled=true"
+                description: Label selector for ingresses to include as callback URLs
+              defaultCallbackUrl:
+                type: string
+                default: "https://oauth2.nashes.uk/oauth2/callback"
+                description: Default callback URL (always included)
+              googleClientSecretRef:
+                type: object
+                description: Secret reference for Google OAuth credentials (must be in same namespace)
+                properties:
+                  name:
+                    type: string
+                    description: Name of the secret containing Google OAuth credentials
+                  idKey:
+                    type: string
+                    description: Key in the secret for the client ID
+                  secretKey:
+                    type: string
+                    description: Key in the secret for the client secret
+                required:
+                - name
+                - idKey
+                - secretKey
+            required:
+            - userPoolName
+            - domain
+          status:
+            type: object
+            properties:
+              userPoolId:
+                type: string
+              userPoolArn:
+                type: string
+              clientId:
+                type: string
+              issuerUrl:
+                type: string
+              callbackUrls:
+                type: array
+                items:
+                  type: string
+              debug:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true

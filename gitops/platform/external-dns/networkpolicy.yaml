@@ -1,0 +1,62 @@
+# Policies for external-dns; the default deny is cluster-wide
+# (platform/cilium/default-deny.ccnp.yaml). Peers come from the 2026-10-30 traffic capture. Nothing
+# scrapes the metrics port (no ServiceMonitor).
+
+# Both instances read Services and Ingresses from the API server.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: apiserver
+  namespace: external-dns
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}
+---
+# Route53 and STS (IRSA)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: external-dns
+  namespace: external-dns
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: external-dns
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+    ports:
+    - {protocol: TCP, port: 443}
+---
+# RFC 2136 updates and zone transfers to BIND
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: external-dns-bind
+  namespace: external-dns
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: external-dns-bind
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: bind
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: bind
+    ports:
+    - {protocol: TCP, port: 1053}
+    - {protocol: UDP, port: 1053}

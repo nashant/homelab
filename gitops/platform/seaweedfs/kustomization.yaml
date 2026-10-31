@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: seaweedfs
+resources:
+- namespace.yaml
+- helmrelease.yaml
+- cold-volume.statefulset.yaml
+- tier-move.cronjob.yaml
+- seaweedfs-s3.es.yaml
+- networkpolicy.yaml
+
+# seaweedfs-s3-secret (helm existingConfigSecret) is now synced from SSM by
+# ESO (seaweedfs-s3.es.yaml), no longer generated from s3-config.json.

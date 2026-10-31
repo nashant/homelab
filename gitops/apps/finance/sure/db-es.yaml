@@ -1,0 +1,24 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: sure-pg-owner
+  namespace: finance
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: sure-pg-owner              # db.cluster.yaml bootstrap.initdb.secret
+    creationPolicy: Owner
+    template:
+      type: kubernetes.io/basic-auth
+      engineVersion: v2
+      data:
+        username: sure                 # must equal the Cluster's initdb owner
+        password: "{{ .password }}"
+  data:
+  # Same parameter as sure-es.yaml's db-password, which the app still reads.
+  - secretKey: password
+    remoteRef:
+      key: /k8s/sure/db-password

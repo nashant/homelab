@@ -1,0 +1,62 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: longhorn
+  namespace: longhorn-system
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: longhorn
+      version: 1.11.2
+      sourceRef:
+        kind: HelmRepository
+        name: longhorn
+        namespace: flux-system
+      interval: 1m
+  values:
+    csi:
+      kubeletRootDir: /var/lib/kubelet
+      attacherReplicaCount: 1
+      provisionerReplicaCount: 1
+      resizerReplicaCount: 1
+      snapshotterReplicaCount: 1
+    ingress:
+      enabled: true
+      ingressClassName: public-traefik
+      host: longhorn.nashes.uk
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        traefik.ingress.kubernetes.io/router.middlewares: oauth2-proxy-oauth2-proxy@kubernetescrd
+        external-dns.alpha.kubernetes.io/target: home.nashes.uk
+      tls: true
+      tlsSecret: longhorn-tls
+    persistence:
+      defaultClass: true
+      defaultFsType: ext4
+      defaultClassReplicaCount: 2
+      reclaimPolicy: Delete
+      defaultDiskSelector:
+        enable: true
+        selector: "ssd"          # keep general volumes off the `bulk` disk (reserved for cold tier + Frigate)
+      # new volumes from this class join the `nightly` group (see 20-backup-jobs.yaml).
+      # `longhorn-scratch` deliberately omits this — transcode scratch is not backed up.
+      recurringJobSelector:
+        enable: true
+        jobList: '[{"name":"nightly","isGroup":true}]'
+    defaultBackupStore:
+      # MinIO on arm64-1 (RPi4 + USB HDD). Region is `tilehurst`, not a real AWS
+      # region — MinIO rejects anything else with AuthorizationHeaderMalformed.
+      # Endpoint/credentials come from the minio-backup-credentials secret
+      # (minio-backup.es.yaml), since backupTarget cannot carry the endpoint.
+      backupTarget: s3://longhorn@tilehurst/
+      backupTargetCredentialSecret: minio-backup-credentials
+      pollInterval: 300
+    defaultSettings:
+      priorityClass: system-cluster-critical
+      # No version checks to longhorn-upgrade-responder.rancher.io (the network policy blocks them too)
+      upgradeChecker: false
+      # auto-delete orphaned replica directories (2026-08: 87 orphans ate ~750G of ssd)
+      orphanResourceAutoDeletion: replica-data
+      # force-delete pods stuck Terminating on a dead node so RWO volumes reattach elsewhere
+      nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod

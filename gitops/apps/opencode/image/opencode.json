@@ -1,0 +1,87 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "zai-coding-plan/glm-5.3",
+  "provider": {
+    "zai-coding-plan": {
+      "options": {
+        "baseURL": "https://api.z.ai/api/coding/paas/v4",
+        "apiKey": "{file:/opt/secrets/llm/zai}"
+      }
+    },
+    "openrouter": {
+      "options": {
+        "apiKey": "{file:/opt/secrets/llm/openrouter}"
+      }
+    }
+  },
+  "plugins": [
+    {
+      "package": "./plugin/zai-failover",
+      "options": {
+        "failoverModel": "z-ai/glm-5.3-flash",
+        "weeklyThreshold": 95,
+        "switchBackBelow": 90,
+        "pollIntervalMs": 120000,
+        "apiKeyFile": "/opt/secrets/llm/zai"
+      }
+    }
+  ],
+  "mcp": {
+    "exa": {
+      "type": "remote",
+      "url": "https://mcp.exa.ai/mcp",
+      "enabled": true
+    },
+    "opnsense": {
+      "type": "remote",
+      "url": "http://opnsense.mcp.svc:8080/mcp",
+      "enabled": true,
+      "oauth": false
+    },
+    "ha": {
+      "type": "remote",
+      "url": "http://ha.mcp.svc:8080/mcp",
+      "enabled": true,
+      "oauth": false
+    },
+    "ha-dev": {
+      "type": "remote",
+      "url": "http://ha-dev.mcp.svc:8080/mcp",
+      "enabled": true,
+      "oauth": false
+    },
+    "grafana": {
+      "type": "remote",
+      "url": "http://grafana.mcp.svc:8080/mcp",
+      "enabled": true,
+      "oauth": false
+    },
+    "unifi": {
+      "type": "remote",
+      "url": "http://unifi.mcp.svc:8080/mcp",
+      "enabled": true,
+      "oauth": false
+    }
+  },
+  "permission": {
+    "opnsense_opn_add_*": "ask",
+    "opnsense_opn_delete_*": "ask",
+    "opnsense_opn_update_*": "ask",
+    "opnsense_opn_toggle_*": "ask",
+    "opnsense_opn_set_*": "ask",
+    "opnsense_opn_remove_*": "ask",
+    "opnsense_opn_reconfigure_*": "ask",
+    "opnsense_opn_configure_*": "ask",
+    "opnsense_opn_confirm_changes": "ask",
+    "opnsense_opn_haproxy_add": "ask",
+    "opnsense_opn_haproxy_update": "ask",
+    "opnsense_opn_haproxy_delete": "ask",
+    "ha_*": "ask",
+    "ha_ha_get_*": "allow",
+    "ha_ha_config_get_*": "allow",
+    "ha_ha_config_list_*": "allow",
+    "ha_ha_list_*": "allow",
+    "ha_ha_search": "allow",
+    "ha_ha_eval_template": "allow"
+  }
+}

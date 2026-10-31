@@ -1,0 +1,140 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: public
+  namespace: traefik
+spec:
+  chart:
+    spec:
+      chart: traefik
+      version: 40.2.0
+      sourceRef:
+        kind: HelmRepository
+        name: traefik
+        namespace: flux-system
+  dependsOn:
+  - namespace: cert-manager
+    name: cert-manager
+  - namespace: traefik
+    name: traefik-crds
+  - namespace: traefik
+    name: gateway-api-crds
+  # CRDs come from the traefik-crds and gateway-api-crds releases, not this chart's crds/
+  install:
+    crds: Skip
+  interval: 10m
+  values:
+    priorityClassName: platform-critical
+    deployment:
+      podAnnotations:
+        # Source range other apps trust as "the ingress" (platform/cilium/ingress.ippool.yaml)
+        ipam.cilium.io/ip-pool: ingress
+    api:
+      dashboard: true
+      insecure: false
+
+    extraObjects: []
+
+    # Default certificate for the classic Ingress path. Gateway listeners get
+    # their cert via certificateRefs, but kubernetesIngress traffic does not
+    # share that store — without a "default" TLSStore, Ingresses with no
+    # tls.secretName fall back to Traefik's self-signed TRAEFIK DEFAULT CERT.
+    # This single "default" TLSStore lives in the shared traefik namespace and
+    # is read by BOTH traefik instances, so it is declared ONLY here (declaring
+    # it in private.hr.yaml too causes a Helm "already exists" ownership clash).
+    tlsStore:
+      default:
+        defaultCertificate:
+          secretName: wildcard-tls
+
+    gateway:
+      name: &commonName public-traefik
+      listeners:
+        plex:
+          port: 32400
+          protocol: TCP
+          namespacePolicy:
+            from: All
+
+        web:
+          port: 8080
+          protocol: HTTP
+          namespacePolicy:
+            from: All
+
+        websecure:
+          port: 8443
+          protocol: HTTPS
+          namespacePolicy:
+            from: All
+          mode: Terminate
+          certificateRefs:
+          - kind: Secret
+            name: wildcard-tls
+            group: ""
+
+    gatewayClass:
+      name: *commonName
+
+    ingressClass:
+      enabled: true
+      isDefaultClass: false
+      name: *commonName
+
+    logs:
+      general:
+        level: INFO
+        format: json
+      access:
+        enabled: true
+        format: json
+
+    metrics:
+      prometheus:
+        enabled: true
+        addRoutersLabels: true
+        serviceMonitor:
+          enabled: true
+
+    tracing:
+      otlp:
+        enabled: true
+        http:
+          # chart 40 split otlp.http: needs enabled:true AND endpoint, else the
+          # endpoint is dropped and traefik ships to the localhost:4318 default.
+          enabled: true
+          endpoint: http://tempo.tempo.svc.cluster.local:4318/v1/traces
+
+    ports:
+      plex:
+        port: 32400
+        expose:
+          default: true
+        exposedPort: 32400
+        protocol: TCP
+
+      web:
+        http:
+          redirections:
+            entryPoint:
+              to: websecure
+              scheme: https
+              permanent: true
+
+    providers:
+      kubernetesCRD:
+        allowCrossNamespace: true
+        ingressClass: *commonName
+      kubernetesIngress:
+        enabled: true
+        ingressClass: *commonName
+      kubernetesGateway:
+        enabled: true
+        experimentalChannel: true
+
+    service:
+      annotations:
+        tcp.advertise.upnp/enabled: "true"
+        tcp.advertise.upnp/ports: "443"
+      spec:
+        externalTrafficPolicy: Local

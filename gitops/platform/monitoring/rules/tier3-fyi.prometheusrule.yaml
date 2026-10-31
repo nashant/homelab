@@ -1,0 +1,39 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: tier3-fyi
+  namespace: monitoring
+  labels:
+    release: kube-prometheus
+    tier: "3"
+spec:
+  groups:
+  - name: tier3.fyi
+    interval: 2m
+    rules:
+    - alert: MediaPodRestarting
+      expr: rate(kube_pod_container_status_restarts_total{namespace="media"}[15m]) * 60 > 2
+      for: 10m
+      labels:
+        severity: info
+      annotations:
+        summary: "{{ $labels.namespace }}/{{ $labels.pod }} restarting >2/min"
+        description: Container {{ $labels.container }} has been restarting frequently for 10m+.
+
+    - alert: PodOOMKilled
+      expr: increase(kube_pod_container_status_restarts_total[15m]) > 0 and on(namespace,pod,container) kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} > 0
+      for: 1m
+      labels:
+        severity: info
+      annotations:
+        summary: "{{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container }} OOMKilled"
+        description: Container was OOMKilled in the last 15m — consider raising memory limit.
+
+    - alert: MediaDeploymentUnavailable
+      expr: kube_deployment_status_replicas_available{namespace="media"} == 0
+      for: 15m
+      labels:
+        severity: info
+      annotations:
+        summary: Media deployment {{ $labels.deployment }} unavailable
+        description: No Ready replicas for 15m+. Media stack is non-critical but worth investigating.

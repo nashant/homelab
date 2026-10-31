@@ -1,0 +1,24 @@
+# http: opencode web UI/API (ingress.yaml, opencode.nashes.uk).
+# ssh: herdr remote attach (tcproute.yaml, herdr.nashes.uk). The hostname
+# annotations are only for external-dns (BIND), which doesn't read
+# IngressRouteTCP: herdr.nashes.uk -> the private-traefik LB IP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: opencode
+  namespace: opencode
+  labels:
+    app: opencode
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: herdr.nashes.uk
+    external-dns.alpha.kubernetes.io/target: 172.16.1.5
+spec:
+  selector:
+    app: opencode
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+  - name: ssh
+    port: 2222
+    targetPort: ssh

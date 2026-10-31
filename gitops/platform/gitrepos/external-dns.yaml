@@ -1,0 +1,10 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: external-dns
+  namespace: flux-system
+spec:
+  interval: 60m
+  url: https://github.com/kubernetes-sigs/external-dns
+  ref:
+    branch: master

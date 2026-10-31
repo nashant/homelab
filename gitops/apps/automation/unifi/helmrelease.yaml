@@ -1,0 +1,286 @@
+# UniFi OS Server. The `unifi` Service (service.yaml) also selects these pods by the
+# `app` label and resolves its targetPorts by container port NAME, so keep both.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: unifi-os-server
+  namespace: unifi
+spec:
+  # The 5m default is too short for a new image digest plus the UOS boot. A timed-out upgrade
+  # rolls back, which restarts the pod again.
+  timeout: 15m
+  values:
+    defaultPodOptions:
+      priorityClassName: apps-high
+      hostname: unifi-os-server
+      # The internet-health check pings ping.ui.com, which resolves to 1.1.1.1 and 8.8.8.8. UniFi
+      # is not the gateway here, so the check has no use. Loopback keeps the pings in the pod and
+      # the egress policy needs no rule for them.
+      hostAliases:
+      - ip: 127.0.0.1
+        hostnames: [ping.ui.com]
+      labels:
+        app: unifi-os-server
+      securityContext:
+        # systemd is PID 1 and runs as root; the pre-chart pod had no seccomp profile
+        runAsNonRoot: false
+        seccompProfile:
+          type: Unconfined
+    controllers:
+      main:
+        strategy: Recreate   # Longhorn RWO volumes cannot be attached to two pods at once
+        containers:
+          app:
+            nameOverride: unifi-os-server
+            image: &image
+              repository: ghcr.io/unihosted/unifi-os-server-docker
+              # 5.1.42 as rebuilt on 2026-10-26 with Node.js 24.22.1 (Node2Shell, CVE-2026-111497).
+              # It still bundles Network 10.5.67; see the fwupdate-marker init container.
+              tag: 5.1.42@sha256:0f1fc1b92d6159089569d5fc053868c9906f140b59c6d7e4a5a1470fe9d810a7
+            securityContext:
+              # systemd needs SYS_ADMIN to manage cgroups; NET_RAW/NET_ADMIN mirror
+              # the upstream compose cap_add.
+              privileged: true
+            ports:
+            - {name: ui, containerPort: 443, protocol: TCP}
+            - {name: inform, containerPort: 8080, protocol: TCP}
+            - {name: ctrl-api, containerPort: 8443, protocol: TCP}
+            - {name: portal, containerPort: 8444, protocol: TCP}
+            - {name: speedtest, containerPort: 6789, protocol: TCP}
+            - {name: stun, containerPort: 3478, protocol: UDP}
+            - {name: discovery, containerPort: 10003, protocol: UDP}
+            - {name: syslog, containerPort: 5514, protocol: UDP}
+            env:
+              TZ: Europe/London
+              # Entrypoint hard-requires this and writes it to system.properties as
+              # `system_ip`. Nothing is adopted here, so the pod IP is sufficient.
+              UOS_SYSTEM_IP:
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              # Upstream's port-7443 bypass skips UOS SSO entirely and is documented
+              # as "NOT FOR PRODUCTION". Left off — use a proper API key instead.
+              EXPOSE_NETWORK_APP: "false"
+              MONGO_INTERNAL: "false"
+              MONGO_HOST: unifi-os-database-svc
+              MONGO_PORT: "27017"
+              MONGO_USER: unifi
+              MONGO_PASS:
+                valueFrom:
+                  secretKeyRef:
+                    name: unifi-os-mongodb-user
+                    key: password
+              MONGO_AUTH_SOURCE: admin
+            lifecycle:
+              # Nodes boot ipv6.disable=1; Ubiquiti's nginx templates hardcode
+              # `listen [::]`, so nginx aborts config load and binds nothing.
+              # Re-runs each start because the image filesystem is ephemeral.
+              postStart:
+                exec:
+                  command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    sed -i '/listen \[::\]/d' /usr/share/unifi-core/http/*.conf
+                    sed -i 's|listen \[::\]:${e} ssl http2 default_server;||g' \
+                      /usr/share/unifi-core/app/service.js
+                    for i in $(seq 1 90); do
+                      if systemctl is-active --quiet unifi-core; then
+                        systemctl restart unifi-core
+                        exit 0
+                      fi
+                      sleep 5
+                    done
+            probes:
+              liveness:
+                enabled: false
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: ui
+                  # UOS boots systemd, postgres, mongo client, rabbitmq and unifi-core;
+                  # first start also initialises the database. Allow 15 minutes.
+                  initialDelaySeconds: 60
+                  periodSeconds: 15
+                  timeoutSeconds: 5
+                  failureThreshold: 60
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: ui
+                  periodSeconds: 20
+                  timeoutSeconds: 5
+                  failureThreshold: 6
+            resources:
+              requests:
+                cpu: 500m
+                memory: 2Gi
+              limits:
+                cpu: "4"
+                memory: 6Gi
+        initContainers:
+          # The Network app updates itself and its DB in place, but the image keeps the older
+          # version. At boot ubnt-dpkg-restore.service reinstalls the cached newer package, only
+          # when /boot/.fwupdate exists. It did not run on the 2026-10-30 restart, and the older
+          # Network app then refused the newer DB. The marker is made before every start.
+          fwupdate-marker:
+            image: *image
+            command: [/bin/sh, -c, touch /boot/.fwupdate]
+    service:
+      app:
+        controller: main
+        forceRename: unifi-os-ui
+        labels:
+          app: unifi-os-server
+        annotations:
+          traefik.ingress.kubernetes.io/service.serversscheme: https
+          traefik.ingress.kubernetes.io/service.serverstransport: unifi-unifi-skip-verify@kubernetescrd
+        ports:
+          ui:
+            port: 443
+          inform:
+            port: 8080
+    ingress:
+      # Private/LAN only: no oauth2-proxy in front of this console.
+      private:
+        forceRename: unifi-os-private
+        className: private-traefik
+        hosts:
+        - host: &oak unifi-os.23oak.uk
+          paths: &paths
+          - path: /
+            pathType: Prefix
+            service:
+              identifier: app
+              port: ui
+        - host: &nashes unifi-os.nashes.uk
+          paths: *paths
+        tls:
+        - hosts: [*oak, *nashes]
+    persistence:
+      cgroup:
+        type: hostPath
+        hostPath: /sys/fs/cgroup
+        hostPathType: Directory
+        globalMounts:
+        - path: /sys/fs/cgroup
+      uos:
+        # Mounted by subPath: uosserver, unifi, persistent (dpkg restore cache) and
+        # boot.
+        forceRename: unifi-os-uos
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 10Gi
+        globalMounts:
+        - path: /var/lib/uosserver
+          subPath: uosserver
+        - path: /var/lib/unifi
+          subPath: unifi
+        # ubnt-dpkg-cache records self-updated packages (e.g. the Network app)
+        # here; ubnt-dpkg-restore reinstalls them on boot, before unifi starts.
+        # Without this the image's bundled Network version boots against a DB
+        # already migrated by a newer one and refuses to start.
+        - path: /persistent
+          subPath: persistent
+        # ubnt-dpkg-restore.service only runs when /boot/.fwupdate exists; the
+        # subPath holds that marker.
+        - path: /boot
+          subPath: boot
+      data:
+        forceRename: unifi-os-data
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 10Gi
+        globalMounts:
+        - path: /data
+      run:
+        type: emptyDir
+        medium: Memory
+        globalMounts:
+        - path: /run
+      run-lock:
+        type: emptyDir
+        medium: Memory
+        globalMounts:
+        - path: /run/lock
+      tmp:
+        type: emptyDir
+        medium: Memory
+        globalMounts:
+        - path: /tmp
+      journal:
+        type: emptyDir
+        medium: Memory
+        globalMounts:
+        - path: /var/lib/journal
+      unifi-tmp:
+        type: emptyDir
+        medium: Memory
+        sizeLimit: 64Mi
+        globalMounts:
+        - path: /var/opt/unifi/tmp
+      # named to sort after `data`: the chart orders mounts by name, and this one
+      # must be mounted on top of /data
+      data-core-http:
+        type: emptyDir
+        medium: Memory
+        globalMounts:
+        - path: /data/unifi-core/config/http
+    networkpolicies:
+      # The upstream entrypoint sets PostgreSQL `listen_addresses = '*'` and appends
+      # `host all all 0.0.0.0/0 trust` to pg_hba.conf — unauthenticated Postgres on
+      # 5432. On a flat pod network that is reachable by every pod in the cluster,
+      # so ingress is default-denied and only the ports the `unifi` Service exposes are
+      # opened. AP traffic to the BGP-advertised ClusterIP lands on any node and is
+      # SNATed to that node's IP when forwarded; 172.16.0.0/16 holds the node IPs as well
+      # as the LAN and VLAN subnets, so it covers both paths.
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - ipBlock: {cidr: 172.16.0.0/16}
+            ports:
+            - {protocol: TCP, port: 443}
+            - {protocol: TCP, port: 8080}
+            - {protocol: UDP, port: 3478}   # STUN
+            - {protocol: UDP, port: 10003}  # device discovery
+            - {protocol: UDP, port: 1900}
+            - {protocol: UDP, port: 5514}   # AP syslog
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: traefik
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: private-traefik
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: mcp
+              podSelector:
+                matchLabels:
+                  app: unifi
+            ports:
+            - {protocol: TCP, port: 443}
+          egress:
+          - to:
+            - podSelector:
+                matchLabels:
+                  app: unifi-os-database-svc
+            ports:
+            - {protocol: TCP, port: 27017}
+          # UI cloud: remote access, firmware and updates (443), cloud MQTT (8883)
+          - to:
+            - ipBlock:
+                cidr: 0.0.0.0/0
+                except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+            ports:
+            - {protocol: TCP, port: 443}
+            - {protocol: TCP, port: 8883}

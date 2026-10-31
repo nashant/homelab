@@ -1,0 +1,14 @@
+# One switch per file in crds-files/ (key = the part after the last "_").
+crds:
+  ingressroutes: true
+  ingressroutetcps: true
+  ingressrouteudps: true
+  middlewares: true
+  middlewaretcps: true
+  serverstransports: true
+  serverstransporttcps: true
+  tlsoptions: true
+  tlsstores: true
+  traefikservices: true
+# Versions upstream defines but does not serve, to serve anyway: {<key>: [<version>, ...]}
+serve: {}

@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- helmrepo.yaml
+- namespace.yaml
+- traefik-crds.hr.yaml
+- gateway-api-crds.hr.yaml
+- wildcard.cert.yaml
+- private.hr.yaml
+- public.hr.yaml
+- networkpolicy.yaml

@@ -1,0 +1,68 @@
+# Policies for seaweedfs; the default deny is cluster-wide (platform/cilium/default-deny.ccnp.yaml).
+# Peers come from the 2026-10-30 traffic capture plus the chart, the cold-volume StatefulSet and the
+# tier-move CronJob. Nothing scrapes the metrics ports (no ServiceMonitor), so they stay closed.
+
+# The master, filer, S3 gateway, both volume servers and the 03:00 tier-move job use many HTTP and
+# gRPC ports between them. Traffic inside the namespace is open.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: seaweedfs-internal
+  namespace: seaweedfs
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector: {}
+  egress:
+  - to:
+    - podSelector: {}
+---
+# S3 clients: Loki, Tempo, the Thanos compactor and store gateway, the Thanos sidecar in the
+# Prometheus pod (block uploads) and the image registry.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: seaweedfs-s3
+  namespace: seaweedfs
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: seaweedfs
+      app.kubernetes.io/component: s3
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: loki
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: loki
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: tempo
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: tempo
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: thanos
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: thanos
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: registry
+      podSelector:
+        matchLabels:
+          app: registry
+    ports:
+    - {protocol: TCP, port: 8333}

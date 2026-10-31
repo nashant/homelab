@@ -1,0 +1,17 @@
+# Home Assistant (prod) long-lived token for the agent's ha-mcp (../README.md).
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: ha
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: ha
+    creationPolicy: Owner
+  data:
+  - secretKey: token
+    remoteRef:
+      key: /k8s/mcp/ha-token

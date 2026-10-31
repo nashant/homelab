@@ -1,0 +1,116 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: zb2mqtt
+  namespace: automation
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: apps-critical
+      annotations:
+        fluentbit.io/parser: zb2mqtt
+      securityContext:
+        # image runs as root (no USER)
+        runAsNonRoot: false
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            image:
+              repository: koenkk/zigbee2mqtt
+              tag: 2.14.2@sha256:addbfb08fcef2e4477de1535636118241e10d13e898fbe4d9faba8a4d7396311
+            env:
+              TZ: Europe/London
+            probes:
+              readiness: &probe
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /
+                    port: 8080
+                  initialDelaySeconds: 30
+                  periodSeconds: 10
+              liveness: *probe
+            resources:
+              requests:
+                cpu: 250m
+                memory: 250M
+              limits:
+                cpu: "1"
+                memory: 1Gi
+    service:
+      app:
+        controller: main
+        ports:
+          http:
+            port: 8080
+    ingress:
+      public:
+        className: public-traefik
+        annotations:
+          traefik.ingress.kubernetes.io/router.middlewares: oauth2-proxy-oauth2-proxy@kubernetescrd
+          external-dns.alpha.kubernetes.io/target: home.nashes.uk
+        hosts:
+        - host: &nashes zb2m.nashes.uk
+          paths: &paths
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: app
+              port: http
+        tls:
+        - hosts: [*nashes]
+      private:
+        className: private-traefik
+        hosts:
+        - host: &oak zb2m.23oak.uk
+          paths: *paths
+        - host: *nashes
+          paths: *paths
+        tls:
+        - hosts: [*oak, *nashes]
+    persistence:
+      data:
+        forceRename: zb2mqtt-data
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 1Gi
+        globalMounts:
+        - path: /app/data
+    networkpolicies:
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: traefik
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: traefik
+            ports:
+            - {protocol: TCP, port: 8080}
+          egress:
+          # Zigbee coordinator (network serial bridge)
+          - to:
+            - ipBlock: {cidr: 172.16.0.20/32}
+            ports:
+            - {protocol: TCP, port: 6638}
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: mqtt
+            ports:
+            - {protocol: TCP, port: 1883}
+          # OTA firmware index
+          - to:
+            - ipBlock:
+                cidr: 0.0.0.0/0
+                except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+            ports:
+            - {protocol: TCP, port: 443}

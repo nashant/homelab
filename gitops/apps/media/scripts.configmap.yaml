@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scripts
+  namespace: media
+data:
+  ass_to_srt.sh: |
+    #!/bin/bash -e
+
+    usage() {
+      echo "Usage: $0 filename"
+      exit 1
+    }
+
+    if [[ "$sonarr_eventtype" == "Test" ]]; then
+      echo "Test working"
+      exit 0
+    fi
+
+    file="${1:-$sonarr_episodefile_path}"
+    [ -z "$file" ] && usage
+    asses=$(mediainfo --Output=JSON "$file" | jq -r '.media.track[] | select(."@type"=="Text" and .Format=="ASS") | .ID')
+    if [ -z "$asses" ]; then
+      echo "No asses in $file, skipping"
+      exit 0
+    fi
+    tmpfile="${file%.*}.tmp.mkv"
+    ffmpeg -i "$file" -c copy -c:s srt "$tmpfile"
+    mv "$tmpfile" "$file"

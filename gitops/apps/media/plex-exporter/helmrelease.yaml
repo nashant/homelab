@@ -1,0 +1,98 @@
+# Prometheus exporter for Plex (https://github.com/cplieger/plex-exporter).
+# Its own pod, not a sidecar: it exits on a rejected token, and a crashing sidecar
+# would mark plex-0 NotReady and drop Plex from its Service.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: plex-exporter
+  namespace: media
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: apps-high
+      securityContext:
+        # distroless nonroot
+        runAsUser: 65532
+        runAsGroup: 65532
+    controllers:
+      main:
+        containers:
+          app:
+            image:
+              repository: ghcr.io/cplieger/plex-exporter
+              tag: v4.4.2@sha256:353c1cc97cbf4cf7ac368c3c09d825a40b6e10e9c93a5f84f297708a17f169dc
+            env:
+              PLEX_URL: http://plex:32400
+              PLEX_TOKEN_FILE: /secrets/token
+            probes:
+              liveness: &probe
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/health
+                    port: 9594
+                  periodSeconds: 30
+                  timeoutSeconds: 5
+              readiness: *probe
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: [ALL]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 256Mi
+    persistence:
+      token:
+        type: secret
+        name: plex-exporter
+        globalMounts:
+        - path: /secrets
+          readOnly: true
+      # /api/health reads a marker the exporter writes here
+      tmp:
+        type: emptyDir
+        medium: Memory
+        sizeLimit: 8Mi
+        globalMounts:
+        - path: /tmp
+    service:
+      app:
+        controller: main
+        ports:
+          metrics:
+            port: 9594
+    serviceMonitor:
+      app:
+        service:
+          identifier: app
+        endpoints:
+        - port: metrics
+          path: /metrics
+          interval: 30s
+    networkpolicies:
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: monitoring
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: prometheus
+            ports:
+            - {protocol: TCP, port: 9594}
+          egress:
+          - to:
+            - podSelector:
+                matchLabels:
+                  app.kubernetes.io/name: plex-media-server
+            ports:
+            - {protocol: TCP, port: 32400}

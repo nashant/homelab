@@ -1,0 +1,72 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: esphome
+  namespace: automation
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: apps-critical
+      annotations:
+        fluentbit.io/parser: esphome
+      # live runs on the host network
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        # image runs as root (no USER)
+        runAsNonRoot: false
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            image:
+              repository: esphome/esphome
+              tag: 2026.10.0@sha256:3a32372dfbd6d3b7c65cf6f5a86b06282cc9b5799a25dcb1fcbca4843fb88b27
+            resources:
+              requests:
+                cpu: 500m
+                memory: 512Mi
+              limits:
+                cpu: "5"
+                memory: 6Gi
+    service:
+      app:
+        controller: main
+        ports:
+          http:
+            port: 6052
+    ingress:
+      public:
+        className: public-traefik
+        annotations:
+          traefik.ingress.kubernetes.io/router.middlewares: oauth2-proxy-oauth2-proxy@kubernetescrd
+          external-dns.alpha.kubernetes.io/target: home.nashes.uk
+        hosts:
+        - host: &nashes esphome.nashes.uk
+          paths: &paths
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: app
+              port: http
+        tls:
+        - hosts: [*nashes]
+      private:
+        className: private-traefik
+        hosts:
+        - host: &oak esphome.23oak.uk
+          paths: *paths
+        - host: *nashes
+          paths: *paths
+        tls:
+        - hosts: [*oak, *nashes]
+    persistence:
+      data:
+        forceRename: esphome-data
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 50Gi
+        globalMounts:
+        - path: /config

@@ -1,0 +1,35 @@
+# HA recorder DB. The `homeassistant` SQL user was copied from the old server by
+# `mariadb-dump --system=users` (its password lives only in HA's secrets.yaml), so the
+# operator does not manage it. HA reaches it via the `mariadb` Service (service.yaml).
+apiVersion: k8s.mariadb.com/v1alpha1
+kind: MariaDB
+metadata:
+  name: homeassistant-db
+  namespace: automation
+spec:
+  image: mariadb:12.3.3
+  rootPasswordSecretKeyRef:
+    name: mariadb
+    key: root-password
+  replicas: 1
+  port: 3306
+  storage:
+    size: 20Gi
+    storageClassName: longhorn
+  # server defaults the old mariadb:12.3.3 Deployment ran with
+  myCnf: |
+    [mariadb]
+    bind-address=*
+    character_set_server=utf8mb4
+    collation_server=utf8mb4_uca1400_ai_ci
+  priorityClassName: apps-critical
+  podMetadata:
+    annotations:
+      fluentbit.io/parser: mariadb
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1G
+    limits:
+      cpu: "1"
+      memory: 2G

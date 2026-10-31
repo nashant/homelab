@@ -1,0 +1,10 @@
+# Deliberately NOT one of opencode's edit namespaces (apps/opencode/rbac.yaml):
+# the agent must not be able to exec in here or edit the proxy's allow rules.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: egress-proxy
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

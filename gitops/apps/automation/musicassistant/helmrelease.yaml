@@ -1,0 +1,97 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: musicassistant
+  namespace: automation
+spec:
+  values:
+    defaultPodOptions:
+      priorityClassName: apps-high
+      annotations:
+        fluentbit.io/parser: musicassistant
+      securityContext:
+        # image runs as root (no USER)
+        runAsNonRoot: false
+    controllers:
+      main:
+        strategy: Recreate
+        containers:
+          app:
+            image:
+              repository: ghcr.io/music-assistant/server
+              tag: 2.10.8@sha256:661e88bea76a9e79f38feca791f6c7373376ab60766ee01f56b66418ca243b68
+            env:
+              LOG_LEVEL: info
+            resources:
+              requests:
+                cpu: 100m
+                memory: 250Mi
+              limits:
+                cpu: 500m
+                memory: 1Gi
+    service:
+      app:
+        controller: main
+        ports:
+          http:
+            port: 8095
+          stream:
+            port: 8097
+    ingress:
+      main:
+        className: public-traefik
+        annotations:
+          traefik.ingress.kubernetes.io/router.middlewares: oauth2-proxy-oauth2-proxy@kubernetescrd
+          external-dns.alpha.kubernetes.io/target: home.nashes.uk
+        hosts:
+        - host: &nashes musicassistant.nashes.uk
+          paths:
+          - path: /
+            pathType: ImplementationSpecific
+            service:
+              identifier: app
+              port: http
+        tls:
+        - hosts: [*nashes]
+    persistence:
+      data:
+        forceRename: musicassistant-data
+        retain: true
+        storageClass: longhorn
+        accessMode: ReadWriteOnce
+        size: 10Gi
+        globalMounts:
+        - path: /data
+    # No players are configured; only metadata providers (Last.fm, MusicBrainz) go out.
+    networkpolicies:
+      main:
+        controller: main
+        policyTypes: [Ingress, Egress]
+        rules:
+          ingress:
+          - from:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: traefik
+              podSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: public-traefik
+            ports:
+            - {protocol: TCP, port: 8095}
+          egress:
+          - to:
+            - ipBlock:
+                cidr: 0.0.0.0/0
+                except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+            ports:
+            - {protocol: TCP, port: 443}
+          # mDNS and SSDP discovery. Multicast does not leave the pod network; allowing it keeps
+          # the drop metrics clean.
+          - to:
+            - ipBlock: {cidr: 224.0.0.251/32}
+            ports:
+            - {protocol: UDP, port: 5353}
+          - to:
+            - ipBlock: {cidr: 239.255.255.250/32}
+            ports:
+            - {protocol: UDP, port: 1900}

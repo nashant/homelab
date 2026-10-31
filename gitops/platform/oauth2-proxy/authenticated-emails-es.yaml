@@ -1,0 +1,18 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: oauth2-proxy-authenticated-emails
+  namespace: oauth2-proxy
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: oauth2-proxy-authenticated-emails
+    creationPolicy: Owner
+  # The chart's authenticatedEmailsFile (persistence: secret) mounts this key as the email list.
+  data:
+  - secretKey: restricted_user_access
+    remoteRef:
+      key: /k8s/oauth2-proxy/authenticated-emails

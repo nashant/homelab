@@ -1,0 +1,70 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: thanos
+  namespace: thanos
+spec:
+  releaseName: thanos
+  interval: 10m
+  timeout: 15m
+  chart:
+    spec:
+      chart: thanos
+      # 0.36.0 added app.kubernetes.io/name to every selector (immutable): upgrading across it needs
+      # the workloads orphan-deleted first (chart README "Upgrading to 0.36.0").
+      version: 0.48.0
+      sourceRef:
+        kind: HelmRepository
+        name: thanos
+        namespace: flux-system
+      interval: 1m
+  values:
+    global:
+      objstore:
+        # Secret is managed externally (Kustomize secretGenerator), same
+        # obs-identity objstore.yml the Prometheus Thanos sidecar uses.
+        createSecret: false
+        secretName: thanos-objstore
+        secretKey: objstore.yml
+      # The chart's PrometheusRule (thanos-rules) alerts on absent up{job=~".*thanos.*"}; without
+      # ServiceMonitors Thanos is never scraped and every *IsDown alert fires.
+      serviceMonitor:
+        enabled: true
+
+    # Query layer — fans out to the in-chart store gateway (autogen) plus the
+    # Prometheus Thanos sidecar in the monitoring namespace.
+    query:
+      enabled: true
+      replicaCount: 1
+      endpoints:
+        autogen:
+          enabled: true
+        static:
+        - dnssrv+_grpc._tcp.prometheus-operated.monitoring.svc.cluster.local
+
+    # Store gateway — serves historical TSDB blocks from SeaweedFS S3.
+    storegateway:
+      enabled: true
+      replicaCount: 1
+
+    # Compactor — compaction, 5m/1h downsampling, and 180d retention.
+    compactor:
+      enabled: true
+      retention:
+        resolutionRaw: 30d
+        resolution5m: 180d
+        resolution1h: 180d
+
+    # Unused components.
+    receive:
+      enabled: false
+    ruler:
+      enabled: false
+    queryFrontend:
+      enabled: false
+    bucket:
+      enabled: false
+    rustfs:
+      enabled: false
+    kube-prometheus-stack:
+      enabled: false

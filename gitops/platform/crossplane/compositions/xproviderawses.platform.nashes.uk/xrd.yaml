@@ -1,0 +1,52 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: xproviderawses.platform.nashes.uk
+spec:
+  group: platform.nashes.uk
+  names:
+    kind: XProviderAWS
+    plural: xproviderawses
+  scope: Cluster
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              package:
+                type: string
+                description: Full package URL with version (e.g., xpkg.upbound.io/upbound/provider-aws-iam:v2.3.0)
+              roleName:
+                type: string
+                description: IAM role name for IRSA (e.g., crossplane-iam)
+              managedPolicyNames:
+                type: array
+                items:
+                  type: string
+                description: List of AWS managed policy names (e.g., IAMFullAccess). ARN is constructed automatically.
+              policies:
+                type: object
+                additionalProperties:
+                  type: string
+                description: Map of name to IAM policy JSON document for custom inline policies
+              poll:
+                type: string
+                default: "30m"
+                description: Provider poll interval
+              sync:
+                type: string
+                default: "6h"
+                description: Provider sync interval
+              maxReconcileRate:
+                type: integer
+                default: 1
+                description: Max reconcile rate
+            required:
+            - package
+            - roleName

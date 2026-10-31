@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: external-dns
+resources:
+- namespace.yaml
+- bind.hr.yaml
+- route53.hr.yaml
+- irsarole.yaml
+- bind-tsig.rbac.yaml
+- networkpolicy.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+configMapGenerator:
+- name: helmrelease-values
+  files:
+  - bind.values.yaml
+  - route53.values.yaml

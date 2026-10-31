@@ -1,0 +1,25 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: registry-s3
+  namespace: registry
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: registry-s3               # consumed via envFrom in deployment.yaml
+    creationPolicy: Owner
+  # One JSON object in SSM with two keys, named so they land straight in the registry's
+  # env-var override namespace: REGISTRY_STORAGE_S3_ACCESSKEY / REGISTRY_STORAGE_S3_SECRETKEY.
+  data:
+  # Signs the `_state` token handed to clients between blob-upload requests. Every replica
+  # MUST share it or a PUT that traefik routes to a different pod than the POST fails with
+  # "blob upload invalid - invalid secret" (bit us 2026-09-15).
+  - secretKey: REGISTRY_HTTP_SECRET
+    remoteRef:
+      key: /k8s/registry/http-secret
+  dataFrom:
+  - extract:
+      key: /k8s/registry/s3

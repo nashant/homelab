@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: egress-proxy
+  labels:
+    app: egress-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: egress-proxy
+  template:
+    metadata:
+      labels:
+        app: egress-proxy
+      annotations:
+        squid-conf-version: "2" # bump to restart on ConfigMap changes
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: squid
+        image: registry.nashes.uk/egress-proxy:6.12-1
+        ports:
+        - name: proxy
+          containerPort: 3128
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        volumeMounts:
+        - name: config
+          mountPath: /etc/squid-cfg
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - name: run
+          mountPath: /var/run/squid
+        - name: cache
+          mountPath: /var/cache/squid
+        - name: logs
+          mountPath: /var/log/squid
+        resources:
+          requests: {cpu: 20m, memory: 64Mi}
+          limits: {memory: 256Mi}
+        readinessProbe:
+          tcpSocket: {port: 3128}
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket: {port: 3128}
+          periodSeconds: 30
+      volumes:
+      - name: config
+        configMap: {name: squid}
+      - {name: tmp, emptyDir: {}}
+      - {name: run, emptyDir: {}}
+      - {name: cache, emptyDir: {}}
+      - {name: logs, emptyDir: {}}

@@ -1,0 +1,151 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: provider-aws
+  labels:
+    crossplane.io/xrd: xproviderawses.platform.nashes.uk
+spec:
+  compositeTypeRef:
+    apiVersion: platform.nashes.uk/v1alpha1
+    kind: XProviderAWS
+  mode: Pipeline
+  pipeline:
+  - step: create-provider-resources
+    functionRef:
+      name: function-go-templating
+    input:
+      apiVersion: gotemplating.fn.crossplane.io/v1beta1
+      kind: GoTemplate
+      source: Inline
+      inline:
+        template: |
+          {{- $xr := .observed.composite.resource }}
+          {{- $spec := $xr.spec }}
+          {{- $name := $xr.metadata.name }}
+          {{- $poll := default "30m" $spec.poll }}
+          {{- $sync := default "6h" $spec.sync }}
+          {{- $maxReconcileRate := default 1 $spec.maxReconcileRate }}
+
+          ---
+          {{/* Check Provider observed health for readiness */}}
+          {{- $providerHealthy := false }}
+          {{- range $c := dig "resources" "provider" "resource" "status" "conditions" list .observed }}
+          {{-   if and (eq (dig "type" "" $c) "Healthy") (eq (dig "status" "" $c) "True") }}
+          {{-     $providerHealthy = true }}
+          {{-   end }}
+          {{- end }}
+          apiVersion: pkg.crossplane.io/v1
+          kind: Provider
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: provider
+              {{ if $providerHealthy }}gotemplating.fn.crossplane.io/ready: "True"{{ end }}
+            name: provider-{{ $name }}
+          spec:
+            package: {{ $spec.package }}
+            runtimeConfigRef:
+              name: {{ $name }}-config
+
+          ---
+          apiVersion: pkg.crossplane.io/v1beta1
+          kind: DeploymentRuntimeConfig
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: drc
+              gotemplating.fn.crossplane.io/ready: "True"
+            name: {{ $name }}-config
+          spec:
+            deploymentTemplate:
+              spec:
+                selector: {}
+                template:
+                  spec:
+                    containers:
+                    - name: package-runtime
+                      args:
+                      - --poll={{ $poll }}
+                      - --sync={{ $sync }}
+                      - --max-reconcile-rate={{ $maxReconcileRate }}
+            serviceAccountTemplate:
+              metadata:
+                annotations:
+                  eks.amazonaws.com/role-arn: arn:aws:iam::079357235350:role/{{ $spec.roleName }}
+
+          ---
+          apiVersion: iam.aws.upbound.io/v1beta1
+          kind: Role
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: role
+              crossplane.io/external-name: {{ $spec.roleName }}
+            name: {{ $spec.roleName }}
+          spec:
+            forProvider:
+              assumeRolePolicy: |
+                {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                    {
+                      "Action": "sts:AssumeRoleWithWebIdentity",
+                      "Condition": {
+                        "StringEquals": {
+                          "23oak-k8s-oidc.s3.eu-west-2.amazonaws.com:aud": ["sts.amazonaws.com"]
+                        },
+                        "StringLike": {
+                          "23oak-k8s-oidc.s3.eu-west-2.amazonaws.com:sub": ["system:serviceaccount:crossplane-system:provider-{{ $name }}-*"]
+                        }
+                      },
+                      "Effect": "Allow",
+                      "Principal": {
+                        "Federated": "arn:aws:iam::079357235350:oidc-provider/23oak-k8s-oidc.s3.eu-west-2.amazonaws.com"
+                      }
+                    }
+                  ]
+                }
+
+          {{- range $i, $policyName := (default list $spec.managedPolicyNames) }}
+          ---
+          apiVersion: iam.aws.upbound.io/v1beta1
+          kind: RolePolicyAttachment
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: rpa-managed-{{ $i }}
+            name: {{ $spec.roleName }}-{{ $policyName | lower }}
+          spec:
+            forProvider:
+              policyArn: arn:aws:iam::aws:policy/{{ $policyName }}
+              roleRef:
+                name: {{ $spec.roleName }}
+          {{- end }}
+
+          {{- range $policyName, $policyDoc := (default dict $spec.policies) }}
+          ---
+          apiVersion: iam.aws.upbound.io/v1beta1
+          kind: Policy
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: policy-{{ $policyName }}
+            name: {{ $spec.roleName }}-{{ $policyName }}
+          spec:
+            forProvider:
+              policy: |
+                {{ $policyDoc | nindent 8 }}
+
+          ---
+          apiVersion: iam.aws.upbound.io/v1beta1
+          kind: RolePolicyAttachment
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: rpa-custom-{{ $policyName }}
+            name: {{ $spec.roleName }}-custom-{{ $policyName }}
+          spec:
+            forProvider:
+              policyArnRef:
+                name: {{ $spec.roleName }}-{{ $policyName }}
+              roleRef:
+                name: {{ $spec.roleName }}
+          {{- end }}
+
+  - step: auto-ready
+    functionRef:
+      name: function-auto-ready

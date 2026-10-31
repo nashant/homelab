@@ -1,0 +1,74 @@
+# The role jwks-sync assumes through IAM Roles Anywhere: trusted only for a certificate with CN jwks-sync
+# issued by homelab-jwks-sync-ca through a trust anchor in this account, and allowed only to write the two
+# OIDC discovery objects. The account condition stops another account's trust anchor (a CA with the same
+# CN) from assuming the role.
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: Role
+metadata:
+  name: jwks-sync
+  namespace: kube-system
+  annotations:
+    crossplane.io/external-name: jwks-sync
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    assumeRolePolicy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {"Service": "rolesanywhere.amazonaws.com"},
+            "Action": ["sts:AssumeRole", "sts:TagSession", "sts:SetSourceIdentity"],
+            "Condition": {
+              "StringEquals": {
+                "aws:SourceAccount": "079357235350",
+                "aws:PrincipalTag/x509Subject/CN": "jwks-sync",
+                "aws:PrincipalTag/x509Issuer/CN": "homelab-jwks-sync-ca"
+              }
+            }
+          }
+        ]
+      }
+---
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: Policy
+metadata:
+  name: jwks-sync-oidc-upload
+  namespace: kube-system
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    policy: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": "s3:PutObject",
+            "Resource": [
+              "arn:aws:s3:::23oak-k8s-oidc/keys.json",
+              "arn:aws:s3:::23oak-k8s-oidc/.well-known/openid-configuration"
+            ]
+          }
+        ]
+      }
+---
+apiVersion: iam.aws.m.upbound.io/v1beta1
+kind: RolePolicyAttachment
+metadata:
+  name: jwks-sync-oidc-upload
+  namespace: kube-system
+spec:
+  providerConfigRef:
+    name: default
+    kind: ClusterProviderConfig
+  forProvider:
+    policyArnRef:
+      name: jwks-sync-oidc-upload
+    roleRef:
+      name: jwks-sync

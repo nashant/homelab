@@ -1,0 +1,50 @@
+# Never delete/recreate: the APs inform to this ClusterIP (172.31.35.112) directly,
+# so a new IP would break adoption for every AP at once.
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi
+  namespace: unifi
+  labels:
+    app: unifi
+  annotations:
+    traefik.ingress.kubernetes.io/service.serversscheme: https
+    traefik.ingress.kubernetes.io/service.serverstransport: unifi-unifi-skip-verify@kubernetescrd
+    # Codifies an annotation that already existed only on the live object.
+    external-dns.alpha.kubernetes.io/hostname: unifi-svc.23oak.uk
+spec:
+  type: ClusterIP
+  selector:
+    app: unifi-os-server
+  ports:
+  # UOS UI via unifi-core (443). This is what the ingress targets — NOT container
+  # 8443/ctrl-api, which is the SSO-bypass path upstream marks "NOT FOR PRODUCTION".
+  - name: ui
+    port: 443
+    targetPort: ui
+    protocol: TCP
+  # The load-bearing port for adoption: APs inform here.
+  - name: inform
+    port: 8080
+    targetPort: inform
+    protocol: TCP
+  - name: stun
+    port: 3478
+    targetPort: stun
+    protocol: UDP
+  # UOS moved L3 device discovery from 10001 to 10003.
+  - name: ap-discovery
+    port: 10003
+    targetPort: discovery
+    protocol: UDP
+  # Kept for parity with the old controller. UOS declares no containerPort 1900,
+  # so this is a numeric targetPort and is unverified.
+  - name: l2-discovery
+    port: 1900
+    targetPort: 1900
+    protocol: UDP
+  # The APs send remote syslog here.
+  - name: syslog
+    port: 5514
+    targetPort: syslog
+    protocol: UDP

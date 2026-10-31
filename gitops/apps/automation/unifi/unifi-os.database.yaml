@@ -1,0 +1,36 @@
+apiVersion: mongodbcommunity.mongodb.com/v1
+kind: MongoDBCommunity
+metadata:
+  name: unifi-os-database
+  namespace: unifi
+spec:
+  members: 1
+  type: ReplicaSet
+  version: "7.0.14"
+  security:
+    authentication:
+      modes: ["SCRAM"]
+  users:
+  - name: unifi
+    db: admin
+    passwordSecretRef:
+      name: unifi-os-mongodb-user
+      key: password
+    roles:
+    - name: dbOwner
+      db: ace
+    - name: dbOwner
+      db: ace_stat
+    - name: dbOwner
+      db: ace_audit
+    # Backup restore stages the archive in a scratch DB (ace_restore) and drops it
+    # first; without dbOwner here the import fails with "not authorized on
+    # ace_restore ... dropDatabase" and unifi-core still reports success.
+    - name: dbOwner
+      db: ace_restore
+    scramCredentialsSecretName: unifi-os-mongodb
+  statefulSet:
+    spec:
+      template:
+        spec:
+          priorityClassName: apps-high

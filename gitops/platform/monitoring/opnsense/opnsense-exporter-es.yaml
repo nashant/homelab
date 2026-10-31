@@ -1,0 +1,21 @@
+# API key for the read-only OPNsense user the exporter logs in as, mounted as files.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: opnsense-exporter
+  namespace: monitoring
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: opnsense-exporter
+    creationPolicy: Owner
+  data:
+  - secretKey: api-key
+    remoteRef:
+      key: /k8s/opnsense-exporter/api-key
+  - secretKey: api-secret
+    remoteRef:
+      key: /k8s/opnsense-exporter/api-secret
