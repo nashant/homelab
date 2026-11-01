@@ -5,6 +5,7 @@ resources:
 - cert-manager
 - cilium
 - cnpg
+- cognito
 - crossplane
 - eso
 - external-dns
