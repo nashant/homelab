@@ -25,6 +25,10 @@ spec:
   interval: 10m
   values:
     priorityClassName: platform-critical
+    # no phone-home: disable version check (update.traefik.io) + usage telemetry (collect.traefik.io)
+    global:
+      checkNewVersion: false
+      sendAnonymousUsage: false
     deployment:
       podAnnotations:
         # Source range other apps trust as "the ingress" (platform/cilium/ingress.ippool.yaml)
@@ -68,6 +72,8 @@ spec:
 
     gatewayClass:
       name: *commonName
+      labels:
+        gateway/className: private-traefik
 
     ingressClass:
       enabled: true
@@ -132,6 +138,8 @@ spec:
       kubernetesGateway:
         enabled: true
         experimentalChannel: true
+        # must equal the gatewayClass.labels above, or this instance matches no GatewayClass
+        labelSelector: gateway/className=private-traefik
 
     service:
       spec:

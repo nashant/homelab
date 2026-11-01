@@ -7,10 +7,18 @@ spec:
   interval: 5m
   chart:
     spec:
-      chart: ./helm
-      version: 0.0.1
+      chart: upnp-nat-controller
+      version: 0.2.0
       sourceRef:
-        kind: GitRepository
-        name: upnp-nat-controller
+        kind: HelmRepository
+        name: nashant
         namespace: flux-system
       interval: 1m
+  values:
+    controller:
+      serviceTypes:
+      - LoadBalancer
+      - ClusterIP
+    image:
+      # chart 0.2.0 appVersion is 0.2.0; pin 0.2.1 to match what is running
+      tag: "0.2.1"

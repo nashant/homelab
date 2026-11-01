@@ -19,6 +19,9 @@ spec:
     spec:
       serviceAccountName: opencode # see rbac.yaml + admission-policy.yaml
       runtimeClassName: runsc # gVisor kernel boundary
+      # opencode clients signal the server by the pid in its registration file;
+      # both containers must agree on pids (README "One server").
+      shareProcessNamespace: true
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -89,17 +92,32 @@ spec:
         - name: tmp
           mountPath: /tmp
       containers:
-      # Web UI / API for the phone and `opencode --server` (opencode.nashes.uk).
-      # Same image, PVC, SA and sandbox as the herdr container below.
+      # The one opencode server for web, phone and herdr panes (README "One server").
+      # Service mode reads hostname/port/password only from its config file, so pin them.
       - name: web
         image: registry.nashes.uk/opencode:2.1.2-7
-        # opencode only takes the server password from its environment, so
-        # it is read from the mounted file here rather than set in the spec.
         command: ["/bin/sh", "-c"]
         args:
-        - >-
-          OPENCODE_SERVER_PASSWORD="$(cat /opt/secrets/server/password)"
-          exec opencode serve --hostname 0.0.0.0 --port 8080
+        - |
+          set -eu
+          cfg="$HOME/.config/opencode/service.json"
+          mkdir -p "${cfg%/*}"
+          umask 077
+          { cat "$cfg" 2>/dev/null || echo '{}'; } |
+            jq --rawfile pw /opt/secrets/server/password \
+              '. + {hostname: "0.0.0.0", port: 8080, password: ($pw | sub("\n+$"; ""))}' > "$cfg.tmp"
+          mv "$cfg.tmp" "$cfg"
+          # Never exit: if a pane started the server, `serve` returns at once; wait it out.
+          trap 'kill -TERM "$pid" 2>/dev/null; wait "$pid"; exit 0' TERM INT
+          while :; do
+            start=$(date +%s)
+            opencode serve --service & pid=$!
+            wait "$pid" || true
+            # Quick return = another server is up or startup failed: back off.
+            [ $(( $(date +%s) - start )) -lt 10 ] && delay=10 || delay=1
+            sleep "$delay" & pid=$!
+            wait "$pid" || true
+          done
         ports:
         - name: http
           containerPort: 8080

@@ -188,7 +188,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-    - {key: app, operator: In, values: [jwks-sync, rolesanywhere-sync, secrets-store-csi-driver-provider-aws]}
+    - {key: app, operator: In, values: [jwks-sync, rolesanywhere-sync]}
   policyTypes: [Egress]
   egress:
   - to:

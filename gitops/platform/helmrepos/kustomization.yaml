@@ -23,7 +23,5 @@ resources:
   - pod-identity-webhook.yaml
   - seaweedfs.yaml
   - skyhook.yaml
-  - secrets-store-csi-driver.yaml
-  - aws-secrets-store-csi-provider.yaml
   - thanos.yaml
   - app-template.yaml

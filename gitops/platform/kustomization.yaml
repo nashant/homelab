@@ -28,7 +28,6 @@ resources:
 - egress-proxy
 - mcp
 - seaweedfs
-- secrets-store-csi
 - system-upgrade-controller
 - tempo
 - thanos

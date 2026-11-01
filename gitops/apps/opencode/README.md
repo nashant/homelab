@@ -1,7 +1,7 @@
 # opencode (in-cluster agent)
 
-One pod, two containers sharing the PVC, SA and sandbox: `web` runs
-`opencode serve` (web UI/API for the phone and `opencode --server`), `herdr`
+One pod, two containers sharing the PVC, SA and sandbox: `web` runs the one
+opencode server (`opencode serve --service`; see "One server"), `herdr`
 runs an unprivileged sshd that `herdr --remote` attaches through. The pod is
 the quarantine boundary:
 
@@ -46,9 +46,10 @@ the quarantine boundary:
    GitHub has no stored credential: git and `~/bin/github-token <owner>/<repo>`
    get 1-hour per-repo tokens from octo-sts (`platform/octo-sts/README.md`),
    so each repo needs the App installed and an `opencode.sts.yaml` policy.
-   opencode reads the server password only from `OPENCODE_SERVER_PASSWORD`,
-   so the container's shell wrapper exports it from the file; it is the one
-   credential in opencode's environment.
+   In service mode, opencode reads the server password only from
+   `~/.config/opencode/service.json`. The `web` container copies it there
+   from the mounted file at each start. No credential is in opencode's
+   environment.
 4. **Apply** — `kubectl apply -k clusters/prod/apps/opencode` (or commit and
    let flux reconcile; this repo is the source of truth).
 5. **Clone repos** — `kubectl -n opencode exec -it deploy/opencode -- git clone
@@ -66,10 +67,12 @@ Host herdr.nashes.uk
   ProxyCommand openssl s_client -quiet -verify_return_error -connect %h:443 -servername %h
 ```
 then `herdr --remote herdr.nashes.uk` (or `herdr machine add`). Inside, run
-`opencode --server http://localhost:8080` (password: `cat` the mounted
-`server/password`) so panes and the phone share one set of sessions; two
-opencode processes on the same SQLite file is asking for trouble.
+plain `opencode`. It attaches to the `web` server (see "One server").
 `herdr.nashes.uk` is published by external-dns from the Service annotations.
+
+**Phone.** In a herdr pane, run
+`opencode pair --url https://opencode.nashes.uk` and open the link or scan
+the QR code. The pairing code is valid only on the server that issued it.
 
 **Web / phone.**
 ```
@@ -83,6 +86,49 @@ fetches it from SSM per run (SSO login if expired) and passes the rest through:
 behind this page are the agent's RBAC, HA token and model keys.
 The API is under `/api/` (401 without it); other paths serve the web UI shell.
 Off-LAN fallback: `kubectl -n opencode port-forward deploy/opencode 8080:8080`.
+
+## One server
+
+All clients use the server in the `web` container: the web UI, the phone,
+`oc` on the laptop and `opencode` in herdr panes. Only one server must use
+the SQLite database. From 2026-10-25 to 2026-10-31, each pod ran two: `web`
+and one that a herdr pane started (the `0.0.0.0` probe failure below).
+
+How it works (opencode 2.1.2):
+
+- `opencode serve --service` writes its URL, PID and password to
+  `~/.local/state/opencode/service.json`.
+- A bare `opencode`, `opencode pair` or `opencode api` reads that file.
+  It probes `<url>/api/info`. If the probe fails, the client starts a new
+  `serve --service` in its own container.
+- The registered URL is `http://0.0.0.0:8080`. `0.0.0.0` must be in
+  `NO_PROXY` (`proxy-env.yaml`). If it is not, squid returns 403 to the
+  probe, and every pane starts its own server.
+- Service mode ignores `--hostname`, `--port` and `OPENCODE_SERVER_PASSWORD`
+  when its config file has values. It reads them from
+  `~/.config/opencode/service.json`. The `web` container pins hostname
+  `0.0.0.0`, port `8080` and the SSM password there at each start.
+
+- A client that gets no answer from the registered server waits 5 s, then
+  starts its own `serve --service` in its own container.
+- A client that gets three probe timeouts sends SIGTERM, then SIGKILL, to
+  the registered pid. `opencode service stop`, `restart` and `set` do the
+  same. The pod sets `shareProcessNamespace: true` so that this pid is the
+  server in both containers. Without it, the pid is 1, which is sshd in
+  the `herdr` container.
+
+The `web` container runs `serve --service` in a loop and never exits by
+itself. After a crash, it starts the server again in 1 s, before a pane
+can start one. If a pane starts the server first, it uses the same address
+and password, so all clients still reach it. `serve` in `web` then returns
+at once, and the loop tries again every 10 s until that server stops. The
+pod stays Ready, so the ingress continues to work. Port 8080 accepts only
+one server. To move the server back to `web`, restart the pod.
+
+Check: `opencode service status` in either container must print
+`http://0.0.0.0:8080`, not `stopped`. `ps -o pid,ppid,args` must show one
+`opencode serve --service`. Its parent must be the `web` loop
+(`/bin/sh -c set -eu ...`).
 
 ## Honest capability & residual-risk notes
 
