@@ -1,0 +1,9 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: nashant
+  namespace: flux-system
+spec:
+  interval: 10m
+  type: oci
+  url: oci://ghcr.io/nashant/charts

@@ -17,6 +17,7 @@ resources:
   - mariadb-operator.yaml
   - metallb.yaml
   - mongodb.yaml
+  - nashant.yaml
   - node-feature-discovery.yaml
   - oauth2-proxy.yaml
   - plex.yaml
