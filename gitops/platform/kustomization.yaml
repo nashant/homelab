@@ -9,6 +9,7 @@ resources:
 - crossplane
 - eso
 - external-dns
+- flux
 - generic-device-plugin
 - gitrepos
 - helmrepos

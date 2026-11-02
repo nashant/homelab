@@ -1,0 +1,41 @@
+# Exact version on purpose: a range such as "2.8.x" lets the operator upgrade Flux by itself.
+# The patches keep the controllers as the flux2 chart ran them. No spec.sync yet: the Git sync is the cutover.
+apiVersion: fluxcd.controlplane.io/v1
+kind: FluxInstance
+metadata:
+  name: flux
+  namespace: flux-system
+spec:
+  distribution:
+    version: "2.8.8"
+    registry: ghcr.io/fluxcd
+  # notification-controller and the image controllers are not used. Without notification-controller,
+  # the operator sets an empty --events-addr.
+  components:
+  - source-controller
+  - kustomize-controller
+  - helm-controller
+  cluster:
+    type: kubernetes
+    multitenant: false
+    # networkpolicy.yaml holds the flux-system policies. The operator's policies would allow all egress.
+    networkPolicy: false
+    domain: cluster.local
+  kustomize:
+    patches:
+    - target:
+        kind: Deployment
+        name: "(source-controller|kustomize-controller|helm-controller)"
+      patch: |
+        - op: add
+          path: /spec/template/spec/priorityClassName
+          value: platform-high
+        - op: remove
+          path: /spec/template/spec/containers/0/resources/limits
+    - target:
+        kind: Deployment
+        name: source-controller
+      patch: |
+        - op: replace
+          path: /spec/template/spec/containers/0/resources/requests/cpu
+          value: 100m
