@@ -7,7 +7,7 @@ spec:
   interval: 10m
   chart:
     spec:
-      chart: ./gitops/charts/traefik-crds/v3.7.1
+      chart: ./gitops/charts/traefik-crds/v3.7.17
       sourceRef:
         kind: GitRepository
         name: flux-system

@@ -14,5 +14,5 @@ spec:
         namespace: flux-system
   values:
     serve:
-      # Traefik's experimental gateway provider (v3.7.1 to v3.7.16) lists TCPRoutes at v1alpha2
+      # Traefik's experimental gateway provider (v3.7.x through v3.7.17) lists TCPRoutes at v1alpha2
       tcproutes: [v1alpha2]
