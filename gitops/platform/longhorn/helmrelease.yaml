@@ -8,7 +8,7 @@ spec:
   chart:
     spec:
       chart: longhorn
-      version: 1.11.2
+      version: 1.12.1
       sourceRef:
         kind: HelmRepository
         name: longhorn
@@ -44,6 +44,10 @@ spec:
       recurringJobSelector:
         enable: true
         jobList: '[{"name":"nightly","isGroup":true}]'
+    networkPolicies:
+      # Chart 1.12+ adds its own policies, and one is named longhorn-manager.
+      # That name clashes with ours in networkpolicy.yaml. Our policies stay in use.
+      restrictInternalTraffic: false
     defaultBackupStore:
       # MinIO on arm64-1 (RPi4 + USB HDD). Region is `tilehurst`, not a real AWS
       # region — MinIO rejects anything else with AuthorizationHeaderMalformed.
