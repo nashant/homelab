@@ -20,6 +20,11 @@ spec:
   - namespace: longhorn-system
     name: longhorn
   values:
+    # ServiceMonitors for master, filer, s3 and volume (port 9327).
+    global:
+      seaweedfs:
+        monitoring:
+          enabled: true
     master:
       priorityClassName: platform-high
       replicas: 1

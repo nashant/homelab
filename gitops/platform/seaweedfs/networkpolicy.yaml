@@ -1,6 +1,6 @@
 # Policies for seaweedfs; the default deny is cluster-wide (platform/cilium/default-deny.ccnp.yaml).
 # Peers come from the 2026-10-30 traffic capture plus the chart, the cold-volume StatefulSet and the
-# tier-move CronJob. Nothing scrapes the metrics ports (no ServiceMonitor), so they stay closed.
+# tier-move CronJob. Prometheus scrapes the metrics port 9327 (policy seaweedfs-metrics).
 
 # The master, filer, S3 gateway, both volume servers and the 03:00 tier-move job use many HTTP and
 # gRPC ports between them. Traffic inside the namespace is open.
@@ -66,3 +66,25 @@ spec:
           app: registry
     ports:
     - {protocol: TCP, port: 8333}
+---
+# Prometheus scrapes the chart's ServiceMonitors on the metrics port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: seaweedfs-metrics
+  namespace: seaweedfs
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: seaweedfs
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+    ports:
+    - {protocol: TCP, port: 9327}
