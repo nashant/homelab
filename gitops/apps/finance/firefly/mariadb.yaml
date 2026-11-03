@@ -4,6 +4,7 @@ metadata:
   name: firefly-db
   namespace: finance
 spec:
+  image: mariadb:12.3.3@sha256:d46e102fa8b9b72bfcdeb56f9dd538742092119dc8b11f31fe662605cd234cd9
   rootPasswordSecretKeyRef:
     name: firefly
     key: db-root-password
@@ -30,3 +31,5 @@ spec:
     limits:
       cpu: "1"
       memory: 1Gi
+  updateStrategy:
+    mariadbAutoUpgradeEnabled: true
