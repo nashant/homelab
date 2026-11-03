@@ -1,4 +1,4 @@
-# Exact version on purpose: a range such as "2.8.x" lets the operator upgrade Flux by itself.
+# Exact version on purpose: a range such as "2.10.x" lets the operator upgrade Flux by itself.
 # The patches keep the controllers as the flux2 chart ran them. The sync applies gitops/clusters/prod.
 apiVersion: fluxcd.controlplane.io/v1
 kind: FluxInstance
@@ -7,7 +7,7 @@ metadata:
   namespace: flux-system
 spec:
   distribution:
-    version: "2.8.8"
+    version: "2.10.0"
     registry: ghcr.io/fluxcd
   # notification-controller and the image controllers are not used. Without notification-controller,
   # the operator sets an empty --events-addr.
