@@ -23,7 +23,8 @@ spec:
             "Resource": [
               "arn:aws:route53:::hostedzone/Z00208643MDVX02TG9N7X",
               "arn:aws:route53:::hostedzone/Z0394221315X4TFZ9379C",
-              "arn:aws:route53:::hostedzone/Z0824775IQEX8J6LW8YI"
+              "arn:aws:route53:::hostedzone/Z0824775IQEX8J6LW8YI",
+              "arn:aws:route53:::hostedzone/Z0618143YD4BR6O6FF21"
             ]
           },
           {
