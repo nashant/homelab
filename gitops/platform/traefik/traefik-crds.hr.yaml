@@ -10,5 +10,5 @@ spec:
       chart: ./gitops/charts/traefik-crds/v3.7.1
       sourceRef:
         kind: GitRepository
-        name: home
+        name: flux-system
         namespace: flux-system

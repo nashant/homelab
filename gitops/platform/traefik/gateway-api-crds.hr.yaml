@@ -10,7 +10,7 @@ spec:
       chart: ./gitops/charts/gateway-api-crds/v1.6.1
       sourceRef:
         kind: GitRepository
-        name: home
+        name: flux-system
         namespace: flux-system
   values:
     serve:

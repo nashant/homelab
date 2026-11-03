@@ -11,8 +11,12 @@ All manifests are under `gitops/`:
 - `gitops/platform/` — platform components (networking, storage, observability, secrets, ingress).
 - `gitops/components/` — shared kustomize components that the apps and platform reference.
 - `gitops/charts/` — vendored Helm charts (for example the Gateway API and Traefik CRDs).
+- `gitops/clusters/prod/` — the Flux sync root. It holds the Flux Kustomizations `platform` and `apps`.
+- `bootstrap/` — the Makefile that builds the cluster from bare nodes (see `bootstrap/README.md`).
 
-Flux reads only the `gitops/` tree. Each directory holds a `kustomization.yaml` that lists its
+The Flux Operator runs Flux. FluxInstance `flux` (`gitops/platform/flux/fluxinstance.yaml`) syncs
+`gitops/clusters/prod`. Kustomization `platform` applies `gitops/platform`, and `apps` applies
+`gitops/apps` after `platform` is ready. Each directory holds a `kustomization.yaml` that lists its
 resources. HelmReleases embed their values inline; no separate values files exist.
 
 ## Secrets

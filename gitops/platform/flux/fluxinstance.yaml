@@ -1,5 +1,5 @@
 # Exact version on purpose: a range such as "2.8.x" lets the operator upgrade Flux by itself.
-# The patches keep the controllers as the flux2 chart ran them. No spec.sync yet: the Git sync is the cutover.
+# The patches keep the controllers as the flux2 chart ran them. The sync applies gitops/clusters/prod.
 apiVersion: fluxcd.controlplane.io/v1
 kind: FluxInstance
 metadata:
@@ -15,6 +15,13 @@ spec:
   - source-controller
   - kustomize-controller
   - helm-controller
+  # The operator creates GitRepository and Kustomization "flux-system" from this. The repo is public.
+  sync:
+    kind: GitRepository
+    url: https://github.com/nashant/homelab
+    ref: refs/heads/main
+    path: gitops/clusters/prod
+    interval: 5m
   cluster:
     type: kubernetes
     multitenant: false

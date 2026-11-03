@@ -1,0 +1,7 @@
+# Root of the Flux sync. FluxInstance "flux" (platform/flux/fluxinstance.yaml) points its sync at this
+# directory. The operator creates the GitRepository and the Kustomization "flux-system" that apply it.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- platform.yaml
+- apps.yaml
