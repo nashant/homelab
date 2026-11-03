@@ -16,7 +16,6 @@ resources:
 - intel-device-plugins
 - irsa
 - k3s
-- kro
 - kube-vip
 - longhorn
 - loki
