@@ -29,7 +29,7 @@ spec:
           app:
             image:
               repository: docker.io/ollama/ollama
-              tag: 0.34.2@sha256:da6e0dc5651df159e45686fd663c4dbe1624a52c44d7280eeac1551d8f865532
+              tag: 0.40.14@sha256:ebaef4f4c5d93660e1f25f8ad085a112f51ccfb0e8458073e71793959dba91c9
             env:
               # Server binds loopback by default; the image's docker entrypoint sets 0.0.0.0 but
               # pin it here so a plain `ollama serve` (no entrypoint script) is still reachable.
