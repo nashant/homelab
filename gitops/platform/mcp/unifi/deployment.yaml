@@ -55,6 +55,9 @@ spec:
           value: eager
         - name: UNIFI_META_TOOLS_ENABLED
           value: "false"
+        # Required since 0.44 when meta-tools are off: load every tool module.
+        - name: UNIFI_ENABLED_CATEGORIES
+          value: acl,client_groups,clients,content_filtering,devices,dns,dpi,dynamic_dns,events,firewall,gateway_settings,hotspot,incident_evidence,nat,network,oon,port_forwards,qos,routing,stats,switch,system,traffic_flows,traffic_routes,usergroups,vpn
         - name: HOME
           value: /tmp
         securityContext:
