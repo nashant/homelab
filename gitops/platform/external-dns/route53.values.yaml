@@ -1,6 +1,7 @@
 priorityClassName: platform-high
 extraArgs:
 - --ingress-class=public-traefik
+- --enable-legacy-annotation-prefix
 - --zone-id-filter=Z0394221315X4TFZ9379C
 - --zone-id-filter=Z00208643MDVX02TG9N7X
 - --zone-id-filter=Z0824775IQEX8J6LW8YI
