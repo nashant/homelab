@@ -23,7 +23,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: mcp
-        image: ghcr.io/sirkirby/unifi-network-mcp:0.24.1@sha256:4d15874fa5ec0c028bd2557d8725d22a831dadfa28d87987c49be91bb20245ee
+        image: ghcr.io/sirkirby/unifi-network-mcp:0.44.0@sha256:de690e741b5713f45c811defd443964bdb6f02ba3c44e6777dbc5fe093e28a92
         ports:
         - name: mcp
           containerPort: 8080
