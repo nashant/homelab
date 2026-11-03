@@ -4,11 +4,11 @@ metadata:
   name: seaweedfs-tier-move
   namespace: seaweedfs
 spec:
-  # Daily at 03:00. Ages volumes off the hot (ssd) tier to cold (hdd) once
-  # their data is >7d old. quietFor=168h = "no writes for 7 days", which for
-  # append-only Loki/Tempo/Thanos volumes means "older than 7d". fullPercent=0
-  # so partially-filled volumes still move (the default 95% would skip them).
-  schedule: "0 3 * * *"
+  # Hourly. Moves a hot (ssd) volume to cold (hdd) 48h after its last write,
+  # so no data younger than 48h leaves the 2-replica hot tier. A delete also
+  # counts as a write; Thanos writes straight to hdd instead (RUNBOOK.md).
+  # fullPercent=0 lets partly filled volumes move (the default 95% skips them).
+  schedule: "0 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -26,5 +26,5 @@ spec:
             - sh
             - -c
             - |
-              printf 'lock\nvolume.tier.move -fromDiskType=ssd -toDiskType=hdd -fullPercent=0 -quietFor=168h -apply\nunlock\n' \
+              printf 'lock\nvolume.tier.move -fromDiskType=ssd -toDiskType=hdd -fullPercent=0 -quietFor=48h -apply\nunlock\n' \
                 | weed shell -master=seaweedfs-master.seaweedfs:9333
