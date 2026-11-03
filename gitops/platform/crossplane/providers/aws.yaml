@@ -3,7 +3,7 @@ kind: XProviderAWS
 metadata:
   name: aws-cognitoidp
 spec:
-  package: xpkg.upbound.io/upbound/provider-aws-cognitoidp:v2.3.0
+  package: xpkg.upbound.io/upbound/provider-aws-cognitoidp:v2.9.4
   roleName: crossplane-cognito
   managedPolicyNames:
   - AmazonCognitoPowerUser
@@ -16,7 +16,7 @@ kind: XProviderAWS
 metadata:
   name: aws-iam
 spec:
-  package: xpkg.upbound.io/upbound/provider-aws-iam:v2.3.0
+  package: xpkg.upbound.io/upbound/provider-aws-iam:v2.9.4
   roleName: crossplane-iam
   managedPolicyNames:
   - IAMFullAccess
@@ -30,7 +30,7 @@ kind: XProviderAWS
 metadata:
   name: aws-s3
 spec:
-  package: xpkg.upbound.io/upbound/provider-aws-s3:v2.3.0
+  package: xpkg.upbound.io/upbound/provider-aws-s3:v2.9.4
   roleName: crossplane-s3
   policies:
     oidc-bucket-policy: |

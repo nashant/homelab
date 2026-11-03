@@ -1,0 +1,9 @@
+# The shared AWS provider family. The package manager installs it as a dependency of the
+# provider-aws-* packages, but it does not upgrade it (that needs the alpha flag
+# --enable-dependency-version-upgrades). Keep this version equal to the provider-aws-* versions.
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: upbound-provider-family-aws
+spec:
+  package: xpkg.upbound.io/upbound/provider-family-aws:v2.9.4
