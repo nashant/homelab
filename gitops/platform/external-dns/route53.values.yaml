@@ -5,6 +5,7 @@ extraArgs:
 - --zone-id-filter=Z0394221315X4TFZ9379C
 - --zone-id-filter=Z00208643MDVX02TG9N7X
 - --zone-id-filter=Z0824775IQEX8J6LW8YI
+- --zone-id-filter=Z0618143YD4BR6O6FF21
 policy: sync
 txtOwnerId: /hostedzone/Z0394221315X4TFZ9379C
 txtPrefix: txt.
