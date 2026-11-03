@@ -12,7 +12,7 @@ extraArgs:
 # Enable AXFR zone-transfer reads so external-dns sees current records instead
 # of re-UPSERTing all of them every cycle; also required for record DELETION
 # (prunes orphans like renamed/removed hosts).
-- --rfc2136-tsig-axfr
+- --rfc2136-axfr
 - --source=service
 - --ingress-class=private-traefik
 provider:
