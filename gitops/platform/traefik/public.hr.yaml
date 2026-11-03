@@ -129,9 +129,11 @@ spec:
 
     providers:
       kubernetesCRD:
+        allowExternalNameServices: true
         allowCrossNamespace: true
         ingressClass: *commonName
       kubernetesIngress:
+        allowExternalNameServices: true
         enabled: true
         ingressClass: *commonName
       kubernetesGateway:
