@@ -20,7 +20,7 @@ spec:
           app:
             image:
               repository: ghcr.io/cplieger/plex-exporter
-              tag: v4.4.2@sha256:353c1cc97cbf4cf7ac368c3c09d825a40b6e10e9c93a5f84f297708a17f169dc
+              tag: v4.5.0@sha256:19f151ccf2925736f8c85e77568153d0f02e2851c9e1ceb14c3be0915916ae7e
             env:
               PLEX_URL: http://plex:32400
               PLEX_TOKEN_FILE: /secrets/token

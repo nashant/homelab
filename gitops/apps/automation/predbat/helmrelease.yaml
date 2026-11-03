@@ -19,7 +19,7 @@ spec:
           app:
             image:
               repository: nipar44/predbat_addon
-              tag: v9.3.7@sha256:5f3e077f1bc2351e3d02b178b9f137a32b23fff35c4c24078fd6ec0592e73fd0
+              tag: v9.6.4@sha256:f452dfe746497219c5753cf095ac6d1f00529207a196199c3057b8bd478c3338
             env:
               TZ: Europe/London
               PREDBAT_SECRETS_FILE: /secrets/secrets.yaml

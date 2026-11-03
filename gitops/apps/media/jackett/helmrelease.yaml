@@ -20,7 +20,7 @@ spec:
           app:
             image:
               repository: ghcr.io/linuxserver/jackett
-              tag: v0.24.2900-ls14@sha256:d1b82a9c5bbaea44284a550af739bd838749b72f15b10ef61b6c9d9d1b2f1ed7
+              tag: v0.24.3003-ls25@sha256:3bf3c7ec393767459de6ee59c6ca01959a88faf67a41e02bd57d3fc73c081ddf
             ports:
             - name: jackett-port
               containerPort: 9117

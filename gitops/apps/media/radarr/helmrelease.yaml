@@ -24,7 +24,7 @@ spec:
           app:
             image:
               repository: ghcr.io/linuxserver/radarr
-              tag: nightly-7.0.0.10788-ls28@sha256:13e05f8e2f6e241d498ad4d1c68595a71a7c08a73fe1c1624452585280009dfb
+              tag: nightly-7.0.1.10859-ls32@sha256:82fb53c002aaed6e9156cd34d4208a047664a43cbde0d10d973602b6b9402541
             ports:
             - name: radarr-port
               containerPort: 7878
