@@ -36,6 +36,14 @@ spec:
           {{- $_ := set $policyStatement "Condition" $condition }}
           {{- $trustPolicy := dict "Version" "2012-10-17" "Statement" (list $policyStatement) }}
 
+          {{- /* Deny every call that doesn't come from the home WAN IP. Calls an AWS service makes on
+          the role's behalf (forward access sessions, e.g. SSM decrypting a SecureString through KMS)
+          carry the service's IP, so aws:ViaAWSService=false lets those through. */}}
+          {{- $allowedSourceIps := list "217.155.239.124/32" }}
+          {{- $ipCondition := dict "NotIpAddress" (dict "aws:SourceIp" $allowedSourceIps) "Bool" (dict "aws:ViaAWSService" "false") }}
+          {{- $denyStatement := dict "Sid" "DenyOutsideSourceIp" "Effect" "Deny" "Action" "*" "Resource" "*" "Condition" $ipCondition }}
+          {{- $denyPolicy := dict "Version" "2012-10-17" "Statement" (list $denyStatement) }}
+
           ---
           apiVersion: iam.aws.m.upbound.io/v1beta1
           kind: Role
@@ -47,6 +55,19 @@ spec:
           spec:
             forProvider:
               assumeRolePolicy: '{{ $trustPolicy | toJson }}'
+
+          ---
+          apiVersion: iam.aws.m.upbound.io/v1beta1
+          kind: RolePolicy
+          metadata:
+            annotations:
+              gotemplating.fn.crossplane.io/composition-resource-name: deny-outside-source-ip
+            name: {{ $spec.roleName }}-deny-outside-source-ip
+          spec:
+            forProvider:
+              policy: '{{ $denyPolicy | toJson }}'
+              roleRef:
+                name: {{ $spec.roleName }}
 
           {{- range $i, $policyName := (default list $spec.managedPolicyNames) }}
           ---
