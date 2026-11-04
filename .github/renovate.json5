@@ -1,0 +1,110 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:recommended"],
+  timezone: "Europe/London",
+
+  // Every update needs approval: Renovate opens a PR and a human merges it.
+  automerge: false,
+  minimumReleaseAge: "3 days",
+  minimumReleaseAgeBehaviour: "timestamp-optional",
+
+  // Vendored CRD charts change only through gitops/charts/vendor-crds.sh.
+  ignorePaths: ["gitops/charts/**"],
+
+  flux: { managerFilePatterns: ["/^gitops/.+\\.ya?ml$/"] },
+  kubernetes: { managerFilePatterns: ["/^gitops/.+\\.ya?ml$/"] },
+  crossplane: { managerFilePatterns: ["/^gitops/platform/crossplane/.+\\.ya?ml$/"] },
+
+  customManagers: [
+    {
+      description: "FluxInstance distribution version",
+      customType: "regex",
+      managerFilePatterns: ["/^gitops/platform/flux/fluxinstance\\.yaml$/"],
+      matchStrings: ["distribution:\\s*\\n\\s*version:\\s*\"(?<currentValue>[^\"]+)\""],
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "fluxcd/flux2",
+      extractVersionTemplate: "^v(?<version>.+)$",
+    },
+    {
+      description: "K3s version in the system-upgrade-controller plans",
+      customType: "regex",
+      managerFilePatterns: ["/^gitops/platform/system-upgrade-controller/.+-plan\\.yaml$/"],
+      matchStrings: ["version:\\s*(?<currentValue>v\\d+\\.\\d+\\.\\d+\\+k3s\\d+)"],
+      datasourceTemplate: "github-releases",
+      depNameTemplate: "k3s-io/k3s",
+      versioningTemplate: "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\+k3s(?<build>\\d+)$",
+    },
+    {
+      description: "Crossplane provider packages inside the XProviderAWS XR",
+      customType: "regex",
+      managerFilePatterns: ["/^gitops/platform/crossplane/providers/.+\\.yaml$/"],
+      matchStrings: ["kind: XProviderAWS[\\s\\S]*?package:\\s*(?<depName>xpkg\\.upbound\\.io/[^:\\s]+):(?<currentValue>\\S+)"],
+      datasourceTemplate: "docker",
+    },
+    {
+      description: "CloudNativePG Cluster imageName",
+      customType: "regex",
+      managerFilePatterns: ["/^gitops/.+\\.ya?ml$/"],
+      matchStrings: ["imageName:\\s*(?<depName>[^:\\s]+):(?<currentValue>[^@\\s]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?"],
+      datasourceTemplate: "docker",
+    },
+  ],
+
+  packageRules: [
+    {
+      description: "The LAN-only registry is not reachable from the hosted Renovate app",
+      matchPackageNames: ["registry.nashes.uk/**"],
+      enabled: false,
+    },
+
+    // Tag shapes that the default docker versioning cannot order.
+    {
+      description: "linuxserver tags: <version>-ls<build>, optional nightly- prefix",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ghcr.io/linuxserver/**", "lscr.io/linuxserver/**"],
+      versioning: "regex:^(?<compatibility>nightly-)?[vV]?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:[.-]r?(?<build>\\d+))?-ls(?<revision>\\d+)$",
+    },
+    {
+      description: "Sonarr ls build numbers restarted (ls1 is newer than ls329), so order on the app version only",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ghcr.io/linuxserver/sonarr"],
+      versioning: "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)-ls\\d+$",
+    },
+    {
+      description: "Plex tags: a.b.c.build-<hash>",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["plexinc/pms-docker", "docker.io/plexinc/pms-docker"],
+      versioning: "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)-[0-9a-f]+$",
+    },
+    {
+      description: "CloudNativePG tags: major.minor-<timestamp>-<flavour>",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ghcr.io/cloudnative-pg/postgresql"],
+      versioning: "regex:^(?<major>\\d+)\\.(?<minor>\\d+)-(?<patch>\\d{12})-(?<compatibility>.+)$",
+    },
+    {
+      description: "Firefly III tags: version-a.b.c",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["fireflyiii/core", "fireflyiii/data-importer"],
+      versioning: "regex:^version-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$",
+    },
+
+    // Things that must move together go in one PR.
+    {
+      description: "Home Assistant prod and dev stay in lockstep",
+      matchPackageNames: ["ghcr.io/home-assistant/home-assistant"],
+      groupName: "home-assistant",
+    },
+    { matchPackageNames: ["ghcr.io/homeassistant-ai/ha-mcp"], groupName: "ha-mcp" },
+    { matchDatasources: ["helm"], matchPackageNames: ["traefik"], groupName: "traefik" },
+    { matchDatasources: ["helm"], matchPackageNames: ["mariadb-operator", "mariadb-operator-crds"], groupName: "mariadb-operator" },
+    { matchDatasources: ["helm"], matchPackageNames: ["external-dns"], groupName: "external-dns" },
+    { matchDatasources: ["helm"], matchPackageNames: ["intel-device-plugins-*"], groupName: "intel-device-plugins" },
+    { matchPackageNames: ["xpkg.upbound.io/upbound/provider-*"], groupName: "crossplane-aws-providers" },
+    { matchPackageNames: ["seaweedfs", "chrislusf/seaweedfs"], groupName: "seaweedfs" },
+    { matchPackageNames: ["docker.io/library/redis", "redis"], groupName: "redis" },
+    { matchPackageNames: ["mariadb", "docker.io/library/mariadb"], groupName: "mariadb" },
+    { matchPackageNames: ["amazon/aws-cli"], groupName: "aws-cli" },
+    { matchPackageNames: ["k3s-io/k3s"], groupName: "k3s" },
+  ],
+}
