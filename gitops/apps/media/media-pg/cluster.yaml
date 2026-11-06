@@ -1,0 +1,48 @@
+# Shared PostgreSQL for the media apps (sonarr, radarr, bazarr). Each app has one login role that
+# owns its own databases. The roles are managed here; the databases are in databases.yaml.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: media-pg
+  namespace: media
+spec:
+  instances: 1
+  # Servarr supports PostgreSQL 14-18, but its SQLite migration steps are not tested on 18.
+  # Dated tag = immutable build.
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.11-202610260819-standard-trixie@sha256:ed6923f9ba2399cf9070379a353c710c29ced8a294be73986a2c3dae7e599ce3
+  priorityClassName: apps-high
+  # One instance: a PDB would block every node drain.
+  enablePDB: false
+  # initdb makes the default "app" database and owner. The apps do not use them.
+  bootstrap:
+    initdb:
+      encoding: UTF8
+  managed:
+    roles:
+    - name: sonarr
+      ensure: present
+      login: true
+      passwordSecret:
+        name: media-pg-sonarr
+    - name: radarr
+      ensure: present
+      login: true
+      passwordSecret:
+        name: media-pg-radarr
+    - name: bazarr
+      ensure: present
+      login: true
+      passwordSecret:
+        name: media-pg-bazarr
+  storage:
+    size: 10Gi
+    storageClass: longhorn
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  # TODO(backup): no S3 credentials for CNPG exist yet (the same gap as finance). Until then the
+  # Longhorn volume backup is the only off-pod copy.

@@ -1,0 +1,10 @@
+# Guard against runaway pod creation. Was live-only since 2025-04-30. Brought into git and raised
+# from 10 to 14 for media-pg (instance, initdb job, migration pods).
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota
+  namespace: media
+spec:
+  hard:
+    count/pods: "14"

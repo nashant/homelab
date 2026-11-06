@@ -1,0 +1,38 @@
+# media-pg instances: the apps on 5432, the CNPG operator on the instance manager (8000) and 5432.
+# The default deny is cluster-wide (platform/cilium/default-deny.ccnp.yaml).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: media-pg
+  namespace: media
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: media-pg
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector:
+        matchExpressions:
+        - {key: app.kubernetes.io/name, operator: In, values: [sonarr, radarr, bazarr]}
+        - {key: app.kubernetes.io/controller, operator: In, values: [main]}
+    ports:
+    - {protocol: TCP, port: 5432}
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: cnpg-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: cloudnative-pg
+    ports:
+    - {protocol: TCP, port: 8000}
+    - {protocol: TCP, port: 5432}
+  egress:
+  # API server: pods reach it on the node IPs (needs policyCIDRMatchMode nodes)
+  - to:
+    - ipBlock: {cidr: 172.16.0.10/32}
+    - ipBlock: {cidr: 172.16.0.12/32}
+    - ipBlock: {cidr: 172.16.0.13/32}
+    ports:
+    - {protocol: TCP, port: 6443}

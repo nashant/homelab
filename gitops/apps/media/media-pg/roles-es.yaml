@@ -1,0 +1,91 @@
+# Role passwords are generated in-cluster once and never rotated (refreshPolicy CreatedOnce).
+# CNPG sets each role's password from its Secret, and the app reads the same Secret.
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: media-pg
+  namespace: media
+spec:
+  length: 32
+  digits: 8
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: media-pg-sonarr
+  namespace: media
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: media-pg-sonarr
+    creationPolicy: Owner
+    template:
+      type: kubernetes.io/basic-auth
+      engineVersion: v2
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      data:
+        username: sonarr
+        password: "{{ .password }}"
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: Password
+        name: media-pg
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: media-pg-radarr
+  namespace: media
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: media-pg-radarr
+    creationPolicy: Owner
+    template:
+      type: kubernetes.io/basic-auth
+      engineVersion: v2
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      data:
+        username: radarr
+        password: "{{ .password }}"
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: Password
+        name: media-pg
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: media-pg-bazarr
+  namespace: media
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: media-pg-bazarr
+    creationPolicy: Owner
+    template:
+      type: kubernetes.io/basic-auth
+      engineVersion: v2
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      data:
+        username: bazarr
+        password: "{{ .password }}"
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: Password
+        name: media-pg

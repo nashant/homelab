@@ -1,0 +1,61 @@
+# Servarr apps need a main and a log database each and do not create them. retain: deleting a
+# Database object leaves the data in place.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: media-pg-sonarr-main
+  namespace: media
+spec:
+  cluster:
+    name: media-pg
+  name: sonarr-main
+  owner: sonarr
+  databaseReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: media-pg-sonarr-log
+  namespace: media
+spec:
+  cluster:
+    name: media-pg
+  name: sonarr-log
+  owner: sonarr
+  databaseReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: media-pg-radarr-main
+  namespace: media
+spec:
+  cluster:
+    name: media-pg
+  name: radarr-main
+  owner: radarr
+  databaseReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: media-pg-radarr-log
+  namespace: media
+spec:
+  cluster:
+    name: media-pg
+  name: radarr-log
+  owner: radarr
+  databaseReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: media-pg-bazarr
+  namespace: media
+spec:
+  cluster:
+    name: media-pg
+  name: bazarr
+  owner: bazarr
+  databaseReclaimPolicy: retain
