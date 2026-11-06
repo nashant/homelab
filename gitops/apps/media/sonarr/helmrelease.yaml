@@ -31,6 +31,18 @@ spec:
             image:
               repository: ghcr.io/linuxserver/sonarr
               tag: 4.0.20.3014-ls1@sha256:889dcc58c6aea859033985894b519b2e6b1e55d92527ed123f9f52e42ae7c97b
+            # PostgreSQL in media-pg. These override config.xml; the old sonarr.db stays in /config.
+            env:
+              Sonarr__Postgres__Host: media-pg-rw
+              Sonarr__Postgres__Port: "5432"
+              Sonarr__Postgres__MainDb: sonarr-main
+              Sonarr__Postgres__LogDb: sonarr-log
+              Sonarr__Postgres__User:
+                valueFrom:
+                  secretKeyRef: {name: media-pg-sonarr, key: username}
+              Sonarr__Postgres__Password:
+                valueFrom:
+                  secretKeyRef: {name: media-pg-sonarr, key: password}
             ports:
               - name: http
                 containerPort: 8989
@@ -138,6 +150,12 @@ spec:
                   app.kubernetes.io/name: plex-media-server
             ports:
             - {protocol: TCP, port: 32400}
+          - to:
+            - podSelector:
+                matchLabels:
+                  cnpg.io/cluster: media-pg
+            ports:
+            - {protocol: TCP, port: 5432}
           - to:
             - ipBlock:
                 cidr: 0.0.0.0/0
