@@ -25,6 +25,18 @@ spec:
             image:
               repository: ghcr.io/linuxserver/radarr
               tag: nightly-7.0.1.10859-ls32@sha256:82fb53c002aaed6e9156cd34d4208a047664a43cbde0d10d973602b6b9402541
+            # PostgreSQL in media-pg. These override config.xml; the old radarr.db stays in /config.
+            env:
+              Radarr__Postgres__Host: media-pg-rw
+              Radarr__Postgres__Port: "5432"
+              Radarr__Postgres__MainDb: radarr-main
+              Radarr__Postgres__LogDb: radarr-log
+              Radarr__Postgres__User:
+                valueFrom:
+                  secretKeyRef: {name: media-pg-radarr, key: username}
+              Radarr__Postgres__Password:
+                valueFrom:
+                  secretKeyRef: {name: media-pg-radarr, key: password}
             ports:
             - name: radarr-port
               containerPort: 7878
@@ -151,6 +163,12 @@ spec:
                   app.kubernetes.io/name: plex-media-server
             ports:
             - {protocol: TCP, port: 32400}
+          - to:
+            - podSelector:
+                matchLabels:
+                  cnpg.io/cluster: media-pg
+            ports:
+            - {protocol: TCP, port: 5432}
           - to:
             - ipBlock:
                 cidr: 0.0.0.0/0
