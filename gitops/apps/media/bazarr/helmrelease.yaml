@@ -17,6 +17,20 @@ spec:
             image:
               repository: ghcr.io/linuxserver/bazarr
               tag: v1.6.2-ls370@sha256:9a625883f054e722795affe5e3ca71057e6ed817ecdf99f4a99624346fcc509c
+            # PostgreSQL in media-pg. These override config.yaml; the old db/bazarr.db stays in /config.
+            env:
+              POSTGRES_ENABLED: "true"
+              POSTGRES_HOST: media-pg-rw
+              POSTGRES_PORT: "5432"
+              POSTGRES_DATABASE: bazarr
+              POSTGRES_USERNAME:
+                valueFrom:
+                  secretKeyRef: {name: media-pg-bazarr, key: username}
+              POSTGRES_PASSWORD:
+                valueFrom:
+                  secretKeyRef: {name: media-pg-bazarr, key: password}
+              # libpq looks for a client cert in /root/.postgresql, which the app user cannot read.
+              PGSSLCERT: /tmp/postgresql.crt
             probes:
               readiness:
                 enabled: true
@@ -121,6 +135,12 @@ spec:
                   app.kubernetes.io/name: sonarr
             ports:
             - {protocol: TCP, port: 8989}
+          - to:
+            - podSelector:
+                matchLabels:
+                  cnpg.io/cluster: media-pg
+            ports:
+            - {protocol: TCP, port: 5432}
           - to:
             - ipBlock:
                 cidr: 0.0.0.0/0
