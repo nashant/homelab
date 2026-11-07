@@ -28,11 +28,16 @@ spec:
               limits:
                 cpu: 200m
                 memory: 500M
+    # Fixed LB IP, so LAN devices survive a Service recreate. BIND external-dns
+    # publishes mqtt.nashes.uk; mqtt.home is an OPNsense Unbound host override.
     service:
       app:
         controller: main
+        type: LoadBalancer
+        externalTrafficPolicy: Local
         annotations:
-          external-dns.alpha.kubernetes.io/internal-hostname: mqtt.home
+          lbipam.cilium.io/ips: 172.16.1.10
+          external-dns.alpha.kubernetes.io/hostname: mqtt.nashes.uk
         ports:
           mqtt:
             port: 1883
@@ -50,7 +55,7 @@ spec:
         size: 1Gi
         globalMounts:
         - path: /mosquitto/data
-    # LAN clients (ramses_esp, the SBS50, the laptop) and HA reach the BGP-advertised ClusterIP.
+    # LAN clients (ramses_esp, the SBS50, the laptop) reach the LB IP; HA uses the ClusterIP.
     # 172.16.0.0/24 holds the node IPs, so it also covers HA and traffic SNATed by another node.
     # No egress: the broker opens no connections.
     networkpolicies:
