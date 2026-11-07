@@ -33,7 +33,6 @@ spec:
               tag: 2026.11.0@sha256:c6c1ca9931036bf3a2c4cc088d8db25dfea3b33935a5ecc83c40349462e2f69e
             env:
               TZ: Europe/London
-              PYTHONPATH: /config/deps
             resources:
               requests:
                 cpu: "1"
