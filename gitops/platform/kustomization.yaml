@@ -25,6 +25,7 @@ resources:
 - node-feature-discovery
 - oauth2-proxy
 - octo-sts
+- opnsense
 - radar
 - egress-proxy
 - mcp

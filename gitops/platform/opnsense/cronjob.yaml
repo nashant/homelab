@@ -1,0 +1,76 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: opnsense-cert-sync
+spec:
+  # Let's Encrypt certs renew ~30 days before expiry; runs exit early while the GUI serves the
+  # current cert.
+  schedule: "17 4 * * *"
+  timeZone: Europe/London
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: opnsense-cert-sync   # selected by networkpolicy.yaml
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          # Reach the GUI by its certificate name without depending on cluster DNS
+          hostAliases:
+          - ip: 172.16.0.1
+            hostnames: [opnsense.nashes.uk]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            fsGroup: 65534
+          containers:
+          - name: sync
+            # bash, curl, jq and openssl in one pinned image
+            image: docker.io/nicolaka/netshoot:v0.16@sha256:b09d9b21381f47a79b3cbcb30da25266dc17186ea00ae65e99fdc51396f48e70
+            command: [/bin/bash, /scripts/sync.sh]
+            env:
+            - name: OPNSENSE_HOST
+              value: opnsense.nashes.uk
+            # Set to 1 on a manual run (kubectl create job --from=...) to skip TLS verification:
+            # the bootstrap run, while the GUI still serves its self-signed cert, or after expiry
+            - name: INSECURE
+              value: ""
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: [ALL]
+            resources:
+              requests:
+                cpu: 10m
+                memory: 32Mi
+              limits:
+                memory: 128Mi
+            volumeMounts:
+            - {name: scripts, mountPath: /scripts, readOnly: true}
+            - {name: tls, mountPath: /tls, readOnly: true}
+            - {name: api, mountPath: /api, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+          volumes:
+          - name: scripts
+            configMap:
+              name: opnsense-cert-sync
+          - name: tls
+            secret:
+              secretName: opnsense-tls
+              defaultMode: 0440
+              items:
+              - {key: tls.crt, path: tls.crt}
+              - {key: tls.key, path: tls.key}
+          - name: api
+            secret:
+              secretName: opnsense-api
+              defaultMode: 0440
+          - name: tmp
+            emptyDir: {}

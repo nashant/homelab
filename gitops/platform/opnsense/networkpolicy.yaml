@@ -1,0 +1,15 @@
+# Egress: the OPNsense web GUI/API only. No DNS: the CronJob pins the name with hostAliases.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opnsense-cert-sync
+spec:
+  podSelector:
+    matchLabels:
+      app: opnsense-cert-sync
+  policyTypes: [Ingress, Egress]
+  egress:
+  - to:
+    - ipBlock: {cidr: 172.16.0.1/32}
+    ports:
+    - {protocol: TCP, port: 443}
