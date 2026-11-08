@@ -1,0 +1,20 @@
+# OPNsense API key for user cert-sync (README.md), from SSM.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: opnsense-api
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: opnsense-api
+    creationPolicy: Owner
+  data:
+  - secretKey: api-key
+    remoteRef:
+      key: /k8s/opnsense-cert/api-key
+  - secretKey: api-secret
+    remoteRef:
+      key: /k8s/opnsense-cert/api-secret

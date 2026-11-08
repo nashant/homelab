@@ -1,0 +1,17 @@
+# cert-manager issues the OPNsense web GUI certificate; a daily CronJob pushes it through the
+# OPNsense API (sync.sh). One-time setup on the firewall: README.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: opnsense
+resources:
+- namespace.yaml
+- certificate.yaml
+- opnsense-api-es.yaml
+- cronjob.yaml
+- networkpolicy.yaml
+configMapGenerator:
+- name: opnsense-cert-sync
+  files:
+  - sync.sh
+  options:
+    disableNameSuffixHash: true
