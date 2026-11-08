@@ -21,6 +21,9 @@ spec:
       priorityClassName: platform-critical
     installCRDs: true
     dns01RecursiveNameservers: 8.8.8.8:53,8.8.4.4:53
+    # Self-check through these only; the controller's NetworkPolicy blocks DNS to the
+    # authoritative Route53 nameservers
+    dns01RecursiveNameserversOnly: true
     serviceAccount:
       annotations:
         eks.amazonaws.com/role-arn: arn:aws:iam::079357235350:role/cert-manager
