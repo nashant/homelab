@@ -28,11 +28,16 @@ spec:
           /scripts/init.sh
           exec /scripts/run.sh
         envFrom:
+        # OPNSENSE_KEY, OPNSENSE_PASS (opnsense-api-es.yaml)
         - secretRef:
-            name: opnsense-config
+            name: opnsense-api
         - secretRef:
             name: pia-config
         env:
+        - name: OPNSENSE_HOST
+          value: opnsense.nashes.uk
+        - name: OPNSENSE_IF   # PIA OpenVPN client interface
+          value: ovpnc3
         - name: PF_TARGET_ALIAS_NAME
           value: DelugePodIP
         - name: PF_PORT_ALIAS_NAME

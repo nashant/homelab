@@ -14,11 +14,6 @@ spec:
         # image USER is root
         runAsUser: 65534
         runAsGroup: 65534
-      # The web GUI certificate (platform/opnsense) names opnsense.nashes.uk, which only
-      # OPNsense's Unbound resolves. Pin it to the LAN address.
-      hostAliases:
-      - ip: 172.16.0.1
-        hostnames: [opnsense.nashes.uk]
     controllers:
       main:
         containers:
