@@ -14,13 +14,6 @@ components:
 # Upstream deploy/grafana/dashboard-v1.json (grafana.com 21113) with the datasource input
 # bound to uid "prometheus", plus Firewall and Host (node_exporter) rows.
 configMapGenerator:
-# Public half of the OPNsense web GUI certificate, the exporter's only trusted root.
-# Replace it whenever the GUI certificate is reissued, or the exporter stops scraping.
-- name: opnsense-webgui-cert
-  files:
-  - webgui.crt
-  options:
-    disableNameSuffixHash: true
 - name: opnsense-grafana-dashboard
   files:
   - opnsense.json=grafana-dashboard.json
