@@ -22,15 +22,25 @@ spec:
               tag: 2.14.3@sha256:fb4a6b0f6868ad1cd6a9996479802b2420e599c3463b62bbff8c8cd9a908f43a
             env:
               TZ: Europe/London
+            # The frontend only comes up once the coordinator (tcp://172.16.0.20:6638) answers.
+            # Startup allows 10 min for that; liveness alone killed it after ~60s, turning a
+            # coordinator/network blip into CrashLoopBackOff. If the adapter drops later, z2m
+            # exits by itself ("Adapter disconnected, stopping").
             probes:
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet: &http
+                    path: /
+                    port: 8080
+                  periodSeconds: 10
+                  failureThreshold: 60
               readiness: &probe
                 enabled: true
                 custom: true
                 spec:
-                  httpGet:
-                    path: /
-                    port: 8080
-                  initialDelaySeconds: 30
+                  httpGet: *http
                   periodSeconds: 10
               liveness: *probe
             resources:
