@@ -45,7 +45,5 @@ The API can't select the GUI certificate. That one step stays manual.
    - Set SSL Certificate to `opnsense.nashes.uk`.
    - Add `opnsense.nashes.uk` to Alternate Hostnames, so the GUI's DNS-rebind/referer check
      accepts the name.
-5. **Exporter.** `monitoring/opnsense` trusted only the old self-signed cert. Move it to
-   `opnsense.nashes.uk` with the system CAs.
 
 Use the same `INSECURE=1` run to recover if the GUI cert ever expires.
