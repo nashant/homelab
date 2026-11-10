@@ -4,13 +4,13 @@ stderr() {
 }
 
 opnsense() {
-  # The web GUI is HTTPS-only (HTTP 301s) with a self-signed cert for opnsense.home, hence -k
+  # The web GUI is HTTPS-only (HTTP 301s), with a Let's Encrypt certificate (platform/opnsense)
   local URL="https://${OPNSENSE_HOST}/api/$1" DATA="${2:-}" METHOD="GET" ARGS=()
   if [ -n "$DATA" ]; then
     METHOD="POST"
     ARGS+=(-H "Content-Type: application/json" -d "$DATA")
   fi
-  curl -k -X "${METHOD}" "${ARGS[@]}" -su "$OPNSENSE_KEY:$OPNSENSE_PASS" "$URL"
+  curl -X "${METHOD}" "${ARGS[@]}" -su "$OPNSENSE_KEY:$OPNSENSE_PASS" "$URL"
 }
 
 get_token() {

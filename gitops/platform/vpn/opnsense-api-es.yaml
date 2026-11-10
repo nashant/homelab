@@ -1,0 +1,20 @@
+# OPNsense API key for user vpn_updater (group vpn_updaters), from SSM.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: opnsense-api
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-ssm
+    kind: ClusterSecretStore
+  target:
+    name: opnsense-api
+    creationPolicy: Owner
+  data:
+  - secretKey: OPNSENSE_KEY
+    remoteRef:
+      key: /k8s/vpn-pf/api-key
+  - secretKey: OPNSENSE_PASS
+    remoteRef:
+      key: /k8s/vpn-pf/api-secret

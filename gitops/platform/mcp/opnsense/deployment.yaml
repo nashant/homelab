@@ -29,9 +29,7 @@ spec:
           containerPort: 8080
         env:
         - name: OPNSENSE_URL
-          value: https://172.16.0.1/api
-        - name: OPNSENSE_VERIFY_SSL # self-signed cert, no CA option upstream
-          value: "false"
+          value: https://opnsense.nashes.uk/api
         - name: OPNSENSE_ALLOW_WRITES
           value: "true"
         - name: OPNSENSE_VERSION # skips detection (needs firmware rights); bump on major upgrade

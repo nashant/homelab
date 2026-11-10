@@ -20,10 +20,6 @@ spec:
         spec:
           restartPolicy: Never
           automountServiceAccountToken: false
-          # Reach the GUI by its certificate name without depending on cluster DNS
-          hostAliases:
-          - ip: 172.16.0.1
-            hostnames: [opnsense.nashes.uk]
           securityContext:
             runAsNonRoot: true
             runAsUser: 65534

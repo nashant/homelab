@@ -6,6 +6,7 @@ resources:
 - rbac.yaml
 - vpn-pf.deployment.yaml
 - networkpolicy.yaml
+- opnsense-api-es.yaml
 configMapGenerator:
 - name: pia-scripts
   files:

@@ -1,4 +1,5 @@
-# Egress: the OPNsense API and nothing else (no DNS needed, the URL is an IP).
+# Egress: the OPNsense API and nothing else. DNS to CoreDNS comes from the cluster-wide default
+# (platform/cilium/default-deny.ccnp.yaml).
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:

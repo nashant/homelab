@@ -22,3 +22,11 @@ data:
       cache 30
       forward . 172.31.0.53   # in-cluster BIND (platform/bind)
     }
+  # The firewall's own name lives in OPNsense's Unbound host overrides, not BIND
+  # (platform/opnsense). The more specific zone wins over nashes.uk above.
+  opnsense-nashes-uk.server: |
+    opnsense.nashes.uk:53 {
+      errors
+      cache 30
+      forward . 172.16.0.1
+    }

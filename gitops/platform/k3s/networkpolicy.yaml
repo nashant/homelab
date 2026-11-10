@@ -54,7 +54,8 @@ spec:
     ports:
     - {protocol: TCP, port: 9153}
   egress:
-  # Upstream for "." and home (forward . /etc/resolv.conf, home.server)
+  # Upstream for ".", home and opnsense.nashes.uk (forward . /etc/resolv.conf, home.server,
+  # opnsense-nashes-uk.server)
   - to:
     - ipBlock: {cidr: 172.16.0.1/32}
     ports:

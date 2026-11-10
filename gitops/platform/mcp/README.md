@@ -27,7 +27,7 @@ Firewall writes get OPNsense's 60 s savepoint auto-revert only below 26.7
 (`opn_mcp_info` → `savepoint_support`); `opn_reconfigure_*` never do. Write
 tools are `ask` in opencode's permission config.
 
-TLS verification is off: OPNsense serves a self-signed cert for
-`opnsense.home` and the package has no CA option.
+TLS is verified against `opnsense.nashes.uk`, the web GUI's Let's Encrypt
+certificate (`platform/opnsense`).
 
 Image: `cd opnsense/image && docker build -t registry.nashes.uk/mcp-opnsense:0.4.1-3 . && docker push registry.nashes.uk/mcp-opnsense:0.4.1-3`
