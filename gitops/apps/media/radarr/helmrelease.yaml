@@ -37,6 +37,9 @@ spec:
               Radarr__Postgres__Password:
                 valueFrom:
                   secretKeyRef: {name: media-pg-radarr, key: password}
+              # Host-header allowlist; overrides the UI setting. Without the in-cluster names,
+              # bazarr (http://radarr:7878) gets HTTP 400. localhost and the pod name are always allowed.
+              Radarr__Server__AllowedHosts: radarr.nashes.uk,radarr.23oak.uk,radarr,radarr.media,radarr.media.svc,radarr.media.svc.cluster.local
             ports:
             - name: radarr-port
               containerPort: 7878

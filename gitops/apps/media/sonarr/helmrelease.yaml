@@ -43,6 +43,9 @@ spec:
               Sonarr__Postgres__Password:
                 valueFrom:
                   secretKeyRef: {name: media-pg-sonarr, key: password}
+              # Host-header allowlist; overrides the UI setting. Without the in-cluster names,
+              # bazarr (http://sonarr:8989) gets HTTP 400. localhost and the pod name are always allowed.
+              Sonarr__Server__AllowedHosts: sonarr.nashes.uk,sonarr.23oak.uk,sonarr,sonarr.media,sonarr.media.svc,sonarr.media.svc.cluster.local
             ports:
               - name: http
                 containerPort: 8989
@@ -54,6 +57,9 @@ spec:
                   httpGet:
                     path: /
                     port: 8989
+                    # kubelet sends Host: <pod IP>, which the allowlist rejects with 400
+                    httpHeaders:
+                      - {name: Host, value: localhost}
                   initialDelaySeconds: 30
                   periodSeconds: 30
             resources:
