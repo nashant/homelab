@@ -120,9 +120,9 @@ pred_bat:
   # battery_sim's simulated meters: those only move once their source reports after startup, so a
   # restart or a silent CT clamp drops whole force-charges (lost ~13.9 kWh on 2026-09-28).
   load_today:
-    - sensor.power_monitor_main_house_electricity_daily
+    - sensor.house_electricity_daily
   load_power:
-    - sensor.power_monitor_main_power
+    - sensor.em16p_hallway_supply_power
   import_today:
     - sensor.shadow_battery_grid_import_energy
   export_today:
