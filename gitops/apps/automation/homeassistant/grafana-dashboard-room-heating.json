@@ -1,0 +1,2078 @@
+{
+  "uid": "room-heating",
+  "title": "Room heating",
+  "tags": [
+    "automation",
+    "heating",
+    "homeassistant"
+  ],
+  "description": "Each room's temperature against its target, and who is calling for heat. Source: Home Assistant through Prometheus.",
+  "schemaVersion": 39,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "timezone": "browser",
+  "time": {
+    "from": "now-3d",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Now",
+      "id": 1,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "bargauge",
+      "title": "Under / over target now",
+      "description": "Room temperature minus its target. Target = the lower of the room's Better Thermostat target and the Nest target, so the night setback counts. Rooms without a Better Thermostat use the Nest target. Blank while the Nest is in Eco.",
+      "id": 2,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 9,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_lounge_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_lounge|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Lounge",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_hallway_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_hallway|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Hallway",
+          "refId": "B",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_dining_room_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Dining room",
+          "refId": "C",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_landing_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_landing|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Landing",
+          "refId": "D",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_2_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_jen_s_office|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Jen's office",
+          "refId": "E",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_3_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_ant_s_office|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Ant's office",
+          "refId": "F",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_4_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_robyn_s_room|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Robyn's room",
+          "refId": "G",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_master_bedroom_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_master_bedroom|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Master bedroom",
+          "refId": "H",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bathroom_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Bathroom",
+          "refId": "I",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "text",
+        "showUnfilled": true,
+        "namePlacement": "left",
+        "sizing": "auto",
+        "minVizHeight": 16,
+        "maxVizHeight": 28,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "min": -3,
+          "max": 3,
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1f4e9c",
+                "value": null
+              },
+              {
+                "color": "#6a9be0",
+                "value": -1.0
+              },
+              {
+                "color": "#9a9a9a",
+                "value": -0.3
+              },
+              {
+                "color": "#e0886a",
+                "value": 0.3
+              },
+              {
+                "color": "#b3261e",
+                "value": 1.0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Room temperature now",
+      "description": "From sensor.environment_*_temperature.",
+      "id": 3,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 7,
+        "x": 9,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_lounge_temperature\"})",
+          "legendFormat": "Lounge",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_hallway_temperature\"})",
+          "legendFormat": "Hallway",
+          "refId": "B",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_dining_room_temperature\"})",
+          "legendFormat": "Dining room",
+          "refId": "C",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_landing_temperature\"})",
+          "legendFormat": "Landing",
+          "refId": "D",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_2_temperature\"})",
+          "legendFormat": "Jen's office",
+          "refId": "E",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_3_temperature\"})",
+          "legendFormat": "Ant's office",
+          "refId": "F",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_4_temperature\"})",
+          "legendFormat": "Robyn's room",
+          "refId": "G",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_master_bedroom_temperature\"})",
+          "legendFormat": "Master bedroom",
+          "refId": "H",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bathroom_temperature\"})",
+          "legendFormat": "Bathroom",
+          "refId": "I",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "text",
+        "showUnfilled": true,
+        "namePlacement": "left",
+        "sizing": "auto",
+        "minVizHeight": 16,
+        "maxVizHeight": 28,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "min": 14,
+          "max": 24,
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#6a9be0",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Boiler CH",
+      "description": "Central-heating gas input (sensor.boiler_ch_gas_input_power). 0 = burner off or on hot water.",
+      "id": 4,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_sensor_power_w{entity=\"sensor.boiler_ch_gas_input_power\"})",
+          "legendFormat": "Boiler CH",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#9a9a9a",
+                "value": null
+              },
+              {
+                "color": "#e0886a",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [],
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Nest",
+      "description": "Nest hvac_action. The Nest alone switches the boiler's heating demand.",
+      "id": 5,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (last_over_time(hass_climate_action{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",action=\"heating\"}[6h]))",
+          "legendFormat": "Nest",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Idle",
+                  "color": "#9a9a9a",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Heating",
+                  "color": "#e0886a",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Nest target",
+      "description": "Nest target temperature.",
+      "id": 6,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min by () (last_over_time(hass_climate_target_temperature_celsius{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h]))",
+          "legendFormat": "Nest target",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [],
+          "decimals": 1
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Outdoor",
+      "description": "MVHR outdoor probe (sensor.fan_32_161047_outdoor_temperature).",
+      "id": 7,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_sensor_temperature_celsius{entity=\"sensor.fan_32_161047_outdoor_temperature\"})",
+          "legendFormat": "Outdoor",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [],
+          "decimals": 1
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "Heat calls",
+      "id": 8,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
+      "panels": []
+    },
+    {
+      "type": "state-timeline",
+      "title": "Who is calling for heat",
+      "description": "A room's Better Thermostat can call for heat, but water only flows hot while the Nest calls and the boiler fires.",
+      "id": 9,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_sensor_power_w{entity=\"sensor.boiler_ch_gas_input_power\"}) > bool 0",
+          "legendFormat": "Boiler CH firing",
+          "refId": "A",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (last_over_time(hass_climate_action{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",action=\"heating\"}[6h]))",
+          "legendFormat": "Nest calling",
+          "refId": "B",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h]))",
+          "legendFormat": "Nest Eco",
+          "refId": "C",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_climate_action{entity=\"climate.btrv_lounge\",action=\"heating\"})",
+          "legendFormat": "Lounge wants heat",
+          "refId": "D",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_climate_action{entity=\"climate.btrv_hallway\",action=\"heating\"})",
+          "legendFormat": "Hallway wants heat",
+          "refId": "E",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_climate_action{entity=\"climate.btrv_landing\",action=\"heating\"})",
+          "legendFormat": "Landing wants heat",
+          "refId": "F",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_climate_action{entity=\"climate.btrv_jen_s_office\",action=\"heating\"})",
+          "legendFormat": "Jen's office wants heat",
+          "refId": "G",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_climate_action{entity=\"climate.btrv_ant_s_office\",action=\"heating\"})",
+          "legendFormat": "Ant's office wants heat",
+          "refId": "H",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_climate_action{entity=\"climate.btrv_robyn_s_room\",action=\"heating\"})",
+          "legendFormat": "Robyn's room wants heat",
+          "refId": "I",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by () (hass_climate_action{entity=\"climate.btrv_master_bedroom\",action=\"heating\"})",
+          "legendFormat": "Master bedroom wants heat",
+          "refId": "J",
+          "range": true
+        }
+      ],
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "rowHeight": 0.8,
+        "alignValue": "left",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#d9d9d9",
+                "value": null
+              },
+              {
+                "color": "#e0886a",
+                "value": 0.5
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "no",
+                  "index": 0
+                },
+                "1": {
+                  "text": "yes",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "custom": {
+            "fillOpacity": 85,
+            "lineWidth": 0
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "Over the selected time range",
+      "id": 10,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "panels": []
+    },
+    {
+      "type": "bargauge",
+      "title": "Average shortfall",
+      "description": "Mean of max(0, target \u2212 temperature) over the time range, Eco excluded.",
+      "id": 11,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 0,
+        "y": 22
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "avg_over_time(clamp_min(-(((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_lounge_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_lounge|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)), 0)[$__range:5m])",
+          "legendFormat": "Lounge",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "avg_over_time(clamp_min(-(((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_hallway_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_hallway|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)), 0)[$__range:5m])",
+          "legendFormat": "Hallway",
+          "refId": "B",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "avg_over_time(clamp_min(-(((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_dining_room_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)), 0)[$__range:5m])",
+          "legendFormat": "Dining room",
+          "refId": "C",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "avg_over_time(clamp_min(-(((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_landing_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_landing|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)), 0)[$__range:5m])",
+          "legendFormat": "Landing",
+          "refId": "D",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "avg_over_time(clamp_min(-(((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_2_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_jen_s_office|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)), 0)[$__range:5m])",
+          "legendFormat": "Jen's office",
+          "refId": "E",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "avg_over_time(clamp_min(-(((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_3_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_ant_s_office|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)), 0)[$__range:5m])",
+          "legendFormat": "Ant's office",
+          "refId": "F",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "avg_over_time(clamp_min(-(((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_4_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_robyn_s_room|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)), 0)[$__range:5m])",
+          "legendFormat": "Robyn's room",
+          "refId": "G",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "avg_over_time(clamp_min(-(((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_master_bedroom_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_master_bedroom|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)), 0)[$__range:5m])",
+          "legendFormat": "Master bedroom",
+          "refId": "H",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "avg_over_time(clamp_min(-(((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bathroom_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)), 0)[$__range:5m])",
+          "legendFormat": "Bathroom",
+          "refId": "I",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "text",
+        "showUnfilled": true,
+        "namePlacement": "left",
+        "sizing": "auto",
+        "minVizHeight": 16,
+        "maxVizHeight": 28,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "min": 0,
+          "max": 2,
+          "decimals": 2,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#9a9a9a",
+                "value": null
+              },
+              {
+                "color": "#6a9be0",
+                "value": 0.3
+              },
+              {
+                "color": "#1f4e9c",
+                "value": 1.0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Time more than 0.5 K under",
+      "description": "Share of the time range with the room more than 0.5 K below target, Eco excluded.",
+      "id": 12,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 8,
+        "y": 22
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_lounge_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_lounge|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) < bool -0.5)[$__range:5m])",
+          "legendFormat": "Lounge",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_hallway_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_hallway|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) < bool -0.5)[$__range:5m])",
+          "legendFormat": "Hallway",
+          "refId": "B",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_dining_room_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) < bool -0.5)[$__range:5m])",
+          "legendFormat": "Dining room",
+          "refId": "C",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_landing_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_landing|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) < bool -0.5)[$__range:5m])",
+          "legendFormat": "Landing",
+          "refId": "D",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_2_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_jen_s_office|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) < bool -0.5)[$__range:5m])",
+          "legendFormat": "Jen's office",
+          "refId": "E",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_3_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_ant_s_office|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) < bool -0.5)[$__range:5m])",
+          "legendFormat": "Ant's office",
+          "refId": "F",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_4_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_robyn_s_room|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) < bool -0.5)[$__range:5m])",
+          "legendFormat": "Robyn's room",
+          "refId": "G",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_master_bedroom_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_master_bedroom|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) < bool -0.5)[$__range:5m])",
+          "legendFormat": "Master bedroom",
+          "refId": "H",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bathroom_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) < bool -0.5)[$__range:5m])",
+          "legendFormat": "Bathroom",
+          "refId": "I",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "text",
+        "showUnfilled": true,
+        "namePlacement": "left",
+        "sizing": "auto",
+        "minVizHeight": 16,
+        "maxVizHeight": 28,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#9a9a9a",
+                "value": null
+              },
+              {
+                "color": "#6a9be0",
+                "value": 10
+              },
+              {
+                "color": "#1f4e9c",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Time more than 0.5 K over",
+      "description": "Share of the time range with the room more than 0.5 K above target, Eco excluded.",
+      "id": 13,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 16,
+        "y": 22
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_lounge_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_lounge|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) > bool 0.5)[$__range:5m])",
+          "legendFormat": "Lounge",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_hallway_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_hallway|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) > bool 0.5)[$__range:5m])",
+          "legendFormat": "Hallway",
+          "refId": "B",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_dining_room_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) > bool 0.5)[$__range:5m])",
+          "legendFormat": "Dining room",
+          "refId": "C",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_landing_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_landing|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) > bool 0.5)[$__range:5m])",
+          "legendFormat": "Landing",
+          "refId": "D",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_2_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_jen_s_office|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) > bool 0.5)[$__range:5m])",
+          "legendFormat": "Jen's office",
+          "refId": "E",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_3_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_ant_s_office|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) > bool 0.5)[$__range:5m])",
+          "legendFormat": "Ant's office",
+          "refId": "F",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_4_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_robyn_s_room|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) > bool 0.5)[$__range:5m])",
+          "legendFormat": "Robyn's room",
+          "refId": "G",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_master_bedroom_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_master_bedroom|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) > bool 0.5)[$__range:5m])",
+          "legendFormat": "Master bedroom",
+          "refId": "H",
+          "range": false,
+          "instant": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * avg_over_time(((((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bathroom_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)) > bool 0.5)[$__range:5m])",
+          "legendFormat": "Bathroom",
+          "refId": "I",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "valueMode": "text",
+        "showUnfilled": true,
+        "namePlacement": "left",
+        "sizing": "auto",
+        "minVizHeight": 16,
+        "maxVizHeight": 28,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#9a9a9a",
+                "value": null
+              },
+              {
+                "color": "#e0886a",
+                "value": 10
+              },
+              {
+                "color": "#b3261e",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "row",
+      "title": "Each room: temperature minus target",
+      "id": 14,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Lounge",
+      "description": "Temperature minus target (K). Below 0 = under-heated. Gaps = Nest in Eco.",
+      "id": 15,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 33
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_lounge_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_lounge|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Lounge",
+          "refId": "A",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "min": -4,
+          "max": 3,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1f4e9c",
+                "value": null
+              },
+              {
+                "color": "#6a9be0",
+                "value": -1.0
+              },
+              {
+                "color": "#9a9a9a",
+                "value": -0.3
+              },
+              {
+                "color": "#e0886a",
+                "value": 0.3
+              },
+              {
+                "color": "#b3261e",
+                "value": 1.0
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "gradientMode": "scheme",
+            "spanNulls": false,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Hallway",
+      "description": "Temperature minus target (K). Below 0 = under-heated. Gaps = Nest in Eco.",
+      "id": 16,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 33
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_hallway_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_hallway|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Hallway",
+          "refId": "A",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "min": -4,
+          "max": 3,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1f4e9c",
+                "value": null
+              },
+              {
+                "color": "#6a9be0",
+                "value": -1.0
+              },
+              {
+                "color": "#9a9a9a",
+                "value": -0.3
+              },
+              {
+                "color": "#e0886a",
+                "value": 0.3
+              },
+              {
+                "color": "#b3261e",
+                "value": 1.0
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "gradientMode": "scheme",
+            "spanNulls": false,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Dining room",
+      "description": "Temperature minus target (K). Below 0 = under-heated. Gaps = Nest in Eco.",
+      "id": 17,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 33
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_dining_room_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Dining room",
+          "refId": "A",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "min": -4,
+          "max": 3,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1f4e9c",
+                "value": null
+              },
+              {
+                "color": "#6a9be0",
+                "value": -1.0
+              },
+              {
+                "color": "#9a9a9a",
+                "value": -0.3
+              },
+              {
+                "color": "#e0886a",
+                "value": 0.3
+              },
+              {
+                "color": "#b3261e",
+                "value": 1.0
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "gradientMode": "scheme",
+            "spanNulls": false,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Landing",
+      "description": "Temperature minus target (K). Below 0 = under-heated. Gaps = Nest in Eco.",
+      "id": 18,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_landing_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_landing|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Landing",
+          "refId": "A",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "min": -4,
+          "max": 3,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1f4e9c",
+                "value": null
+              },
+              {
+                "color": "#6a9be0",
+                "value": -1.0
+              },
+              {
+                "color": "#9a9a9a",
+                "value": -0.3
+              },
+              {
+                "color": "#e0886a",
+                "value": 0.3
+              },
+              {
+                "color": "#b3261e",
+                "value": 1.0
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "gradientMode": "scheme",
+            "spanNulls": false,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Jen's office",
+      "description": "Temperature minus target (K). Below 0 = under-heated. Gaps = Nest in Eco.",
+      "id": 19,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 40
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_2_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_jen_s_office|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Jen's office",
+          "refId": "A",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "min": -4,
+          "max": 3,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1f4e9c",
+                "value": null
+              },
+              {
+                "color": "#6a9be0",
+                "value": -1.0
+              },
+              {
+                "color": "#9a9a9a",
+                "value": -0.3
+              },
+              {
+                "color": "#e0886a",
+                "value": 0.3
+              },
+              {
+                "color": "#b3261e",
+                "value": 1.0
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "gradientMode": "scheme",
+            "spanNulls": false,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Ant's office",
+      "description": "Temperature minus target (K). Below 0 = under-heated. Gaps = Nest in Eco.",
+      "id": 20,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 40
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_3_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_ant_s_office|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Ant's office",
+          "refId": "A",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "min": -4,
+          "max": 3,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1f4e9c",
+                "value": null
+              },
+              {
+                "color": "#6a9be0",
+                "value": -1.0
+              },
+              {
+                "color": "#9a9a9a",
+                "value": -0.3
+              },
+              {
+                "color": "#e0886a",
+                "value": 0.3
+              },
+              {
+                "color": "#b3261e",
+                "value": 1.0
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "gradientMode": "scheme",
+            "spanNulls": false,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Robyn's room",
+      "description": "Temperature minus target (K). Below 0 = under-heated. Gaps = Nest in Eco.",
+      "id": 21,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 47
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bedroom_4_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_robyn_s_room|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Robyn's room",
+          "refId": "A",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "min": -4,
+          "max": 3,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1f4e9c",
+                "value": null
+              },
+              {
+                "color": "#6a9be0",
+                "value": -1.0
+              },
+              {
+                "color": "#9a9a9a",
+                "value": -0.3
+              },
+              {
+                "color": "#e0886a",
+                "value": 0.3
+              },
+              {
+                "color": "#b3261e",
+                "value": 1.0
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "gradientMode": "scheme",
+            "spanNulls": false,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Master bedroom",
+      "description": "Temperature minus target (K). Below 0 = under-heated. Gaps = Nest in Eco.",
+      "id": 22,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 47
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_master_bedroom_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.btrv_master_bedroom|climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Master bedroom",
+          "refId": "A",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "min": -4,
+          "max": 3,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1f4e9c",
+                "value": null
+              },
+              {
+                "color": "#6a9be0",
+                "value": -1.0
+              },
+              {
+                "color": "#9a9a9a",
+                "value": -0.3
+              },
+              {
+                "color": "#e0886a",
+                "value": 0.3
+              },
+              {
+                "color": "#b3261e",
+                "value": 1.0
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "gradientMode": "scheme",
+            "spanNulls": false,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Bathroom",
+      "description": "Temperature minus target (K). Below 0 = under-heated. Gaps = Nest in Eco.",
+      "id": 23,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 47
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "((max by () (hass_sensor_temperature_celsius{entity=\"sensor.environment_bathroom_temperature\"})) - on() (min by () (last_over_time(hass_climate_target_temperature_celsius{entity=~\"climate.nestlocal_09aa01ac022300bq_thermostat\"}[6h])))) unless on() (max by () (last_over_time(hass_climate_preset_mode{entity=\"climate.nestlocal_09aa01ac022300bq_thermostat\",mode=\"eco\"}[6h])) == 1)",
+          "legendFormat": "Bathroom",
+          "refId": "A",
+          "range": true
+        }
+      ],
+      "options": {
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "decimals": 1,
+          "min": -4,
+          "max": 3,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1f4e9c",
+                "value": null
+              },
+              {
+                "color": "#6a9be0",
+                "value": -1.0
+              },
+              {
+                "color": "#9a9a9a",
+                "value": -0.3
+              },
+              {
+                "color": "#e0886a",
+                "value": 0.3
+              },
+              {
+                "color": "#b3261e",
+                "value": 1.0
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "gradientMode": "scheme",
+            "spanNulls": false,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      }
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  }
+}
