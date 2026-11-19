@@ -21,7 +21,7 @@ spec:
             "Effect": "Allow",
             "Action": [
               "rolesanywhere:ListTrustAnchors", "rolesanywhere:CreateTrustAnchor", "rolesanywhere:GetTrustAnchor",
-              "rolesanywhere:UpdateTrustAnchor", "rolesanywhere:EnableTrustAnchor",
+              "rolesanywhere:UpdateTrustAnchor", "rolesanywhere:EnableTrustAnchor", "rolesanywhere:PutNotificationSettings",
               "rolesanywhere:ListProfiles", "rolesanywhere:CreateProfile", "rolesanywhere:GetProfile",
               "rolesanywhere:UpdateProfile", "rolesanywhere:EnableProfile", "rolesanywhere:TagResource"
             ],
@@ -125,6 +125,14 @@ spec:
                 [ "$(ra get-trust-anchor --trust-anchor-id $ta --query trustAnchor.enabled --output text)" = True ] \
                   || { ra enable-trust-anchor --trust-anchor-id $ta >/dev/null; echo "trust anchor: enabled"; }
               fi
+              # The client certificate lives 30 days and renews 10 days before expiry (jwks-sync.certificates.yaml).
+              # The default 45-day end-entity warning fires for every certificate from issue; at 7 days it fires
+              # only when a renewal failed. The CA expiry warning keeps its default.
+              EE_DAYS=7
+              [ "$(ra get-trust-anchor --trust-anchor-id $ta --query "trustAnchor.notificationSettings[?event=='END_ENTITY_CERTIFICATE_EXPIRY'].threshold | [0]" --output text)" = $EE_DAYS ] \
+                || { ra put-notification-settings --trust-anchor-id $ta \
+                       --notification-settings enabled=true,event=END_ENTITY_CERTIFICATE_EXPIRY,threshold=$EE_DAYS,channel=ALL >/dev/null
+                     echo "trust anchor: end-entity expiry warning at $EE_DAYS days"; }
               ta_arn=$(ra get-trust-anchor --trust-anchor-id $ta --query trustAnchor.trustAnchorArn --output text)
 
               pid=$(ra list-profiles --query "profiles[?name=='$NAME'].profileId | [0]" --output text)
