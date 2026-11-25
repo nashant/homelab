@@ -13,6 +13,11 @@ resources:
 # Out-of-band prerequisites (secret-bearing, not in git):
 #   1. a bucket-scoped `registry` identity in the SeaweedFS S3 config
 #      (SSM /k8s/seaweedfs/s3-config; the gateway needs a restart/SIGHUP to pick it up)
+#      with actions Read, Write, WriteAcp, List and Tagging, each scoped `:registry`.
+#      WriteAcp is required: Distribution's S3 driver sends `x-amz-acl: private` on
+#      every upload (objectacl cannot be unset), and SeaweedFS >= 4.49 answers an
+#      upload carrying an ACL with 403 AccessDenied unless the identity has WriteAcp
+#      (seaweedfs/seaweedfs#12396). Without it every push fails and pulls still work.
 #   2. SSM /k8s/registry/s3 = {REGISTRY_STORAGE_S3_ACCESSKEY, REGISTRY_STORAGE_S3_SECRETKEY}
 #   3. the `registry` bucket: `echo 's3.bucket.create -name registry' | weed shell`
 #      (Distribution's S3 driver does not create it)
