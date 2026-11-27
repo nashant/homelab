@@ -43,14 +43,14 @@ spec:
           stream:
             port: 8097
     ingress:
-      main:
+      public:
         className: public-traefik
         annotations:
           traefik.ingress.kubernetes.io/router.middlewares: oauth2-proxy-oauth2-proxy@kubernetescrd
           external-dns.alpha.kubernetes.io/target: home.nashes.uk
         hosts:
         - host: &nashes musicassistant.nashes.uk
-          paths:
+          paths: &paths
           - path: /
             pathType: ImplementationSpecific
             service:
@@ -58,6 +58,15 @@ spec:
               port: http
         tls:
         - hosts: [*nashes]
+      private:
+        className: private-traefik
+        hosts:
+        - host: &oak musicassistant.23oak.uk
+          paths: *paths
+        - host: *nashes
+          paths: *paths
+        tls:
+        - hosts: [*oak, *nashes]
     persistence:
       data:
         forceRename: musicassistant-data
