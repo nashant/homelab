@@ -55,7 +55,7 @@ spec:
           zones:
             image: &image
               repository: docker.io/internetsystemsconsortium/bind9
-              tag: 9.20@sha256:66092edb53c081fa11b1fa8219e99065b0f497cb38f568ba789702a4c10e2590
+              tag: 9.20@sha256:978201d91548ec63c3b1c1befd5e6a3c9fa127f79f9058fd82d8e3493fe90ce1
             command: [/bin/sh, -c]
             args:
             - |
