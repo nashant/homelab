@@ -17,8 +17,8 @@ the quarantine boundary:
   Exa's MCP (`mcp.exa.ai`, web search + fetch), the logged squid forward
   proxy for any other web access (`platform/egress-proxy`, via
   `HTTPS_PROXY` in proxy-env.yaml),
-  octo-sts, everything in `automation` + `media` namespaces, HA 8123 and
-  esphome 6052 (hostNetwork). Everything else — LAN, nodes, etcd, kubelet,
+  octo-sts, everything in `automation` + `media` namespaces, HA 8123,
+  esphome 6052 and musicassistant 8095 + 8097 (hostNetwork). Everything else — LAN, nodes, etcd, kubelet,
   VPN, arbitrary internet — implicitly denied. Ingress: private-traefik only
   (LAN/VPN): `opencode.nashes.uk` (HTTP) and `herdr.nashes.uk` (SSH in TLS).
 

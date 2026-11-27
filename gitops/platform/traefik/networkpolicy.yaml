@@ -36,7 +36,7 @@ spec:
   - to:
     - namespaceSelector: {}
   # API server (providers: CRD, Ingress, Gateway API), and host-network backends: Home Assistant,
-  # ESPHome, ep-configurator
+  # ESPHome, ep-configurator, Music Assistant
   - to:
     - ipBlock: {cidr: 172.16.0.10/32}
     - ipBlock: {cidr: 172.16.0.12/32}
@@ -45,4 +45,5 @@ spec:
     - {protocol: TCP, port: 6443}
     - {protocol: TCP, port: 8123}
     - {protocol: TCP, port: 6052}
+    - {protocol: TCP, port: 8095}
     - {protocol: TCP, port: 42069}
