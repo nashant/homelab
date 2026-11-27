@@ -7,7 +7,7 @@
 #   model/git/npm/Exa FQDNs on 443, octo-sts (GitHub tokens) on 8080,
 #   egress-proxy on 3128 (all other web access, logged; platform/egress-proxy),
 #   everything in namespaces automation + media (user requirement),
-#   HA (8123) and esphome (6052) which are hostNetwork pods and therefore
+#   HA (8123), esphome (6052) and musicassistant (8095, 8097), which are hostNetwork pods and therefore
 #   reachable via the host entity rather than the namespace identity.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
@@ -82,19 +82,22 @@ spec:
     toPorts:
     - ports: [{port: "3128", protocol: TCP}]
   # Everything in automation + media namespaces (HA, frigate, esphome,
-  # musicassistant, predbat, radbalance, mqtt, mariadb, *arr, plex, ...)
+  # predbat, radbalance, mqtt, mariadb, *arr, plex, ...)
   - toEndpoints:
     - matchLabels:
         k8s:io.kubernetes.pod.namespace: automation
     - matchLabels:
         k8s:io.kubernetes.pod.namespace: media
-  # hostNetwork services in those namespaces: homeassistant:8123, esphome:6052
+  # hostNetwork services in those namespaces: homeassistant:8123, esphome:6052,
+  # musicassistant:8095 and its stream server on 8097
   # (incl. homeassistant-dev on 8123). Scoped by port, not by node.
   - toEntities: [host, remote-node]
     toPorts:
     - ports:
       - {port: "8123", protocol: TCP}
       - {port: "6052", protocol: TCP}
+      - {port: "8095", protocol: TCP}
+      - {port: "8097", protocol: TCP}
 ---
 # Standard default-deny next to the Cilium policies above, so a pod that no Cilium policy selects is
 # still closed. It adds no allow rules, so it does not change what those policies allow.

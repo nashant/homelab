@@ -9,6 +9,11 @@ spec:
       priorityClassName: apps-high
       annotations:
         fluentbit.io/parser: musicassistant
+      # Players are found by mDNS and SSDP and fetch audio from the stream server, so the server
+      # has to sit on the same layer 2 network as them. No NetworkPolicy applies to a hostNetwork
+      # pod, and AirPlay opens random ports, so there is none.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       securityContext:
         # image runs as root (no USER)
         runAsNonRoot: false
@@ -62,36 +67,3 @@ spec:
         size: 10Gi
         globalMounts:
         - path: /data
-    # No players are configured; only metadata providers (Last.fm, MusicBrainz) go out.
-    networkpolicies:
-      main:
-        controller: main
-        policyTypes: [Ingress, Egress]
-        rules:
-          ingress:
-          - from:
-            - namespaceSelector:
-                matchLabels:
-                  kubernetes.io/metadata.name: traefik
-              podSelector:
-                matchLabels:
-                  app.kubernetes.io/instance: public-traefik
-            ports:
-            - {protocol: TCP, port: 8095}
-          egress:
-          - to:
-            - ipBlock:
-                cidr: 0.0.0.0/0
-                except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
-            ports:
-            - {protocol: TCP, port: 443}
-          # mDNS and SSDP discovery. Multicast does not leave the pod network; allowing it keeps
-          # the drop metrics clean.
-          - to:
-            - ipBlock: {cidr: 224.0.0.251/32}
-            ports:
-            - {protocol: UDP, port: 5353}
-          - to:
-            - ipBlock: {cidr: 239.255.255.250/32}
-            ports:
-            - {protocol: UDP, port: 1900}
