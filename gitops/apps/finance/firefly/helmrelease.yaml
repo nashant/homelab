@@ -34,7 +34,7 @@ spec:
     deploymentStrategyType: Recreate      # RWO upload PVC
     image:
       repository: fireflyiii/core
-      tag: version-6.7.9@sha256:4409f9f0f87378ba95d40811352f4f49338d276bb638c1e6d18a5579f332fbe8
+      tag: version-6.7.9@sha256:10bbe21fbdc68b8fa955d85827aeed197ab46d62c8c745e949d322b9f4b73ff5
     podSecurityContext:
       fsGroup: 33               # www-data; makes the upload PVC writeable
       fsGroupChangePolicy: OnRootMismatch
